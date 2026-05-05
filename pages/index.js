@@ -65,7 +65,6 @@ export default function Home() {
 
   useEffect(() => {
     fetchLeaderboard();
-    // Start particle effect on mount
     startParticleEffect();
     return () => {
       if (particleInterval.current) clearInterval(particleInterval.current);
@@ -92,21 +91,20 @@ export default function Home() {
         ...prev,
         {
           id: Date.now() + Math.random(),
-          x: Math.random() * 100, // percentage relative to container
+          x: Math.random() * 100,
           y: 80,
           size: 8 + Math.random() * 12,
           duration: 1 + Math.random() * 1.5,
           delay: 0,
         }
       ]);
-      // Remove old particles after they finish animation
       setTimeout(() => {
         setParticles(prev => prev.filter(p => p.id !== prev[0]?.id));
       }, 2500);
     }, 500);
   };
 
-  // --- Game init with preview flip (unchanged) ---
+  // --- Game init with preview flip ---
   const initGame = () => {
     let deck = [];
     verses.forEach((pair, idx) => {
@@ -232,6 +230,31 @@ export default function Home() {
     })
   };
 
+  // --- Puzzle ring component (inline inside start screen) ---
+  // We'll generate 8 puzzle icons around the logo
+  const puzzleIcons = ['🧩', '🔑', '✨', '💎', '🪙', '📖', '⛪', '🌟'];
+  const ringRotation = { rotate: '0deg' };
+  const ringStyle = {
+    position: 'absolute',
+    width: '220px',
+    height: '220px',
+    left: 'calc(50% - 110px)',
+    top: 'calc(50% - 110px)',
+    pointerEvents: 'none',
+  };
+  const iconStyle = (index, total) => {
+    const angle = (index / total) * 360;
+    const radius = 100;
+    return {
+      position: 'absolute',
+      left: `calc(50% + ${radius * Math.cos(angle * Math.PI / 180)}px)`,
+      top: `calc(50% + ${radius * Math.sin(angle * Math.PI / 180)}px)`,
+      transform: 'translate(-50%, -50%)',
+      fontSize: '28px',
+      filter: 'drop-shadow(0 0 4px gold)',
+    };
+  };
+
   // Start screen
   if (!gameActive && !gameFinished && !previewMode) {
     return (
@@ -254,6 +277,24 @@ export default function Home() {
               🪙
             </motion.div>
           ))}
+
+          {/* Rotating puzzle ring around the logo */}
+          <motion.div
+            style={ringStyle}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+          >
+            {puzzleIcons.map((icon, idx) => (
+              <div
+                key={idx}
+                style={iconStyle(idx, puzzleIcons.length)}
+                className="absolute text-3xl drop-shadow-gold"
+              >
+                {icon}
+              </div>
+            ))}
+          </motion.div>
+
           <div className="text-center max-w-md w-full z-10">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
