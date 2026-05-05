@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
   // Simple secret protection (optional but recommended)
   const { secret } = req.query;
-  if (secret !== process.env.ADMIN_SECRET && secret !== 'admin123') {
+  if (secret !== process.env.ADMIN_SECRET && secret !== 'wOUR/4426/11') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
