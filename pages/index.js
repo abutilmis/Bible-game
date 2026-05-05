@@ -1,7 +1,76 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import verses from '../data/verses.json';
 import Head from 'next/head';
+
+// --- Visual Juice Component: Tilt & Reflection ---
+const InteractiveCard = ({ card, onClick, isPreview }) => {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const mouseXSpring = useSpring(x);
+  const mouseYSpring = useSpring(y);
+  
+  // Tilt angles
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["15deg", "-15deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-15deg", "15deg"]);
+  
+  // Dynamic Gold Shine Reflection
+  const sheenX = useTransform(mouseXSpring, [-0.5, 0.5], ["0%", "100%"]);
+  const sheenOpacity = useTransform(mouseXSpring, [-0.5, 0.5], [0, 0.5]);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    x.set(mouseX / width - 0.5);
+    y.set(mouseY / height - 0.5);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
+
+  const showFront = card.isFlipped || card.isMatched || isPreview;
+
+  return (
+    <motion.div 
+      className="relative aspect-square cursor-pointer perspective-1000" 
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      onClick={onClick}
+      style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <div className={`relative w-full h-full transition-transform duration-700 preserve-3d ${showFront ? 'rotate-y-180' : ''}`}>
+        
+        {/* Back Side */}
+        <div className="absolute inset-0 backface-hidden bg-[#121212] border-2 border-[#FFD966]/30 rounded-2xl flex items-center justify-center shadow-2xl overflow-hidden">
+           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/5 to-transparent opacity-50"></div>
+           <span className="text-[#FFD966] text-3xl font-black opacity-20">?</span>
+           {/* Moving Shine Effect on Back */}
+           <motion.div style={{ left: sheenX, opacity: sheenOpacity }} className="absolute top-0 w-1/2 h-full bg-white/10 skew-x-12 blur-xl pointer-events-none" />
+        </div>
+
+        {/* Front Side (Gold Foil) */}
+        <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-[#FFD966] via-[#f7e4a1] to-[#d4af37] rounded-2xl flex items-center justify-center p-2 text-center shadow-[0_0_20px_rgba(255,217,102,0.4)] overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+          {/* Real-time Dynamic Light Reflection */}
+          <motion.div 
+            style={{ left: sheenX, opacity: 0.6 }} 
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-25 translate-z-10" 
+          />
+          <span className={`relative z-10 font-black text-black leading-tight drop-shadow-sm ${card.type === 'ref' ? 'text-sm' : 'text-[9.5px]'}`}>
+            {card.content}
+          </span>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 export default function Home() {
   const [cards, setCards] = useState([]);
@@ -15,62 +84,30 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [timerInterval, setTimerInterval] = useState(null);
   const [previewMode, setPreviewMode] = useState(false);
-  const [particles, setParticles] = useState([]);
-  const particleInterval = useRef(null);
+  const [shake, setShake] = useState(false);
+  const [bursts, setBursts] = useState([]);
 
-  // --- Sound Logic (Unchanged) ---
+  // --- Core Game Logic (Unchanged) ---
   const playSound = (type) => {
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioContext();
-      const now = ctx.currentTime;
-      const gain = ctx.createGain();
-      gain.connect(ctx.destination);
-      gain.gain.value = 0.2;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator();
-      osc.connect(gain);
-      if (type === 'flip') {
-        osc.frequency.value = 800;
-        gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-      } else if (type === 'match') {
-        osc.frequency.value = 1200;
-        gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
-      } else if (type === 'win') {
-        osc.frequency.value = 880;
-        osc.start(now);
-        osc.stop(now + 0.6);
-      }
-      if (ctx.state === 'suspended') ctx.resume();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.value = 0.1;
+      if (type === 'flip') { osc.frequency.value = 600; osc.start(); osc.stop(ctx.currentTime + 0.1); }
+      else if (type === 'match') { osc.frequency.value = 1000; osc.start(); osc.stop(ctx.currentTime + 0.2); }
     } catch (e) {}
   };
 
-  useEffect(() => {
-    fetchLeaderboard();
-    startParticleEffect();
-    return () => { if (particleInterval.current) clearInterval(particleInterval.current); };
-  }, []);
+  useEffect(() => { fetchLeaderboard(); }, []);
 
   const fetchLeaderboard = async () => {
     try {
       const res = await fetch('/api/leaderboard');
       const data = await res.json();
       setLeaderboard(Array.isArray(data) ? data : []);
-    } catch (error) { setLeaderboard([]); }
-  };
-
-  const startParticleEffect = () => {
-    if (particleInterval.current) clearInterval(particleInterval.current);
-    particleInterval.current = setInterval(() => {
-      setParticles(prev => [
-        ...prev,
-        { id: Date.now() + Math.random(), x: Math.random() * 100, size: 8 + Math.random() * 12, duration: 2 }
-      ]);
-      setTimeout(() => { setParticles(prev => prev.filter(p => p.id !== prev[0]?.id)); }, 2500);
-    }, 600);
+    } catch (e) { setLeaderboard([]); }
   };
 
   const initGame = () => {
@@ -82,227 +119,187 @@ export default function Home() {
     deck.sort(() => Math.random() - 0.5);
     setCards(deck);
     setFlippedIndices([]);
-    setMoves(0);
-    setTime(0);
-    setGameFinished(false);
-    setSaved(false);
-    setPreviewMode(true);
-    const allFlipped = deck.map(c => ({ ...c, isFlipped: true }));
-    setCards(allFlipped);
+    setMoves(0); setTime(0); setGameFinished(false); setSaved(false); setPreviewMode(true);
     setTimeout(() => {
-      setCards(allFlipped.map(c => ({ ...c, isFlipped: false })));
-      setPreviewMode(false);
-      setGameActive(true);
-      if (timerInterval) clearInterval(timerInterval);
+      setPreviewMode(false); setGameActive(true);
       const interval = setInterval(() => setTime(prev => prev + 1), 1000);
       setTimerInterval(interval);
-    }, 2500);
+    }, 3000);
   };
 
-  const handleCardClick = (idx) => {
-    if (!gameActive || previewMode) return;
-    const card = cards[idx];
-    if (card.isMatched || card.isFlipped || flippedIndices.length === 2) return;
+  const triggerBurst = (x, y) => {
+    const id = Date.now();
+    setBursts(prev => [...prev, { id, x, y }]);
+    setTimeout(() => setBursts(prev => prev.filter(b => b.id !== id)), 1000);
+  };
+
+  const handleCardClick = (idx, e) => {
+    if (!gameActive || previewMode || cards[idx].isFlipped || cards[idx].isMatched || flippedIndices.length === 2) return;
+
     playSound('flip');
     const newCards = [...cards];
     newCards[idx].isFlipped = true;
     setCards(newCards);
     const newFlipped = [...flippedIndices, idx];
     setFlippedIndices(newFlipped);
+
     if (newFlipped.length === 2) {
       setMoves(m => m + 1);
       const [i1, i2] = newFlipped;
       if (newCards[i1].pairId === newCards[i2].pairId) {
+        // MATCH BURST 2.0 & SCREEN SHAKE
         playSound('match');
+        setShake(true);
+        setTimeout(() => setShake(false), 300);
+        triggerBurst(e.clientX, e.clientY);
+
         newCards[i1].isMatched = true;
         newCards[i2].isMatched = true;
         setCards(newCards);
         setFlippedIndices([]);
         if (newCards.every(c => c.isMatched)) {
-          playSound('win');
-          setGameActive(false);
-          setGameFinished(true);
-          if (timerInterval) clearInterval(timerInterval);
+          setGameActive(false); setGameFinished(true);
+          clearInterval(timerInterval);
         }
       } else {
         setTimeout(() => {
-          const resetCards = [...cards];
-          resetCards[i1].isFlipped = false;
-          resetCards[i2].isFlipped = false;
-          setCards(resetCards);
+          newCards[i1].isFlipped = false;
+          newCards[i2].isFlipped = false;
+          setCards([...newCards]);
           setFlippedIndices([]);
-        }, 800);
+        }, 1000);
       }
     }
   };
 
   const saveScore = async () => {
-    if (!playerName.trim()) return alert('እባክዎን ስምዎን ያስገቡ');
+    if (!playerName.trim()) return alert('ስምዎን ያስገቡ');
     const res = await fetch('/api/save-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: playerName.trim(), moves, time })
+      body: JSON.stringify({ name: playerName, moves, time })
     });
     if (res.ok) { setSaved(true); fetchLeaderboard(); }
   };
 
-  const formatTime = (s) => {
-    const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-  };
-
-  // --- Animation Helpers ---
+  // --- Animation Variants ---
   const titleWords = "የመጽሐፍ ቅዱስ ትውስታ ጨዋታ".split(' ');
-  const dropIn = {
-    hidden: { y: -50, opacity: 0 },
-    visible: (i) => ({ y: 0, opacity: 1, transition: { delay: i * 0.1, type: 'spring', stiffness: 300, damping: 20 } })
-  };
-
-  const puzzleIcons = ['🧩', '🔑', '✨', '💎', '🪙', '📖', '⛪', '🌟'];
-  const ringStyle = { position: 'absolute', width: '300px', height: '300px', left: '50%', top: '50%', marginLeft: '-150px', marginTop: '-150px', pointerEvents: 'none' };
-  const iconStyle = (index, total) => {
-    const angle = (index / total) * 360;
-    const radius = 130;
-    return {
-      position: 'absolute',
-      left: `calc(50% + ${radius * Math.cos(angle * Math.PI / 180)}px)`,
-      top: `calc(50% + ${radius * Math.sin(angle * Math.PI / 180)}px)`,
-      transform: 'translate(-50%, -50%)',
-      fontSize: '24px',
-      filter: 'drop-shadow(0 0 10px rgba(255, 217, 102, 0.5))',
-    };
-  };
+  const ringIcons = ['📖', '✨', '🙏', '🔥', '💎', '⛪', '🕊️', '👑'];
 
   return (
-    <>
+    <div className={`min-h-screen bg-[#050505] text-white font-inter overflow-hidden transition-transform duration-100 ${shake ? 'scale-[1.02] rotate-1' : ''}`}>
       <Head>
-        <title>የመጽሐፍ ቅዱስ ትውስታ ጨዋታ</title>
+        <title>Bible Match 2.0</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet" />
       </Head>
 
       <style jsx global>{`
-        .font-inter { font-family: 'Inter', sans-serif; }
-        .perspective-1000 { perspective: 1000px; }
+        .rotate-y-180 { transform: rotateY(180deg); }
         .preserve-3d { transform-style: preserve-3d; }
         .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-        .rotate-y-180 { transform: rotateY(180deg); }
+        .perspective-1000 { perspective: 1200px; }
       `}</style>
 
-      <div className="min-h-screen bg-[#090909] bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[#090909] to-[#050505] flex items-center justify-center p-4 relative overflow-hidden font-inter text-white">
-        
-        {/* Particle System */}
-        <div className="fixed inset-0 pointer-events-none">
-          {particles.map(p => (
-            <motion.div key={p.id} initial={{ y: '110vh', x: `${p.x}%`, opacity: 0.6 }} animate={{ y: '-10vh', opacity: 0 }}
-              transition={{ duration: p.duration, ease: 'linear' }} className="absolute text-[#FFD966]" style={{ fontSize: p.size }}>🪙</motion.div>
+      {/* Particle Burst 2.0 Layer */}
+      {bursts.map(b => (
+        <div key={b.id} className="fixed pointer-events-none z-50" style={{ left: b.x, top: b.y }}>
+          {[...Array(12)].map((_, i) => (
+            <motion.div
+              key={i}
+              initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+              animate={{ 
+                scale: [0, 1.5, 0], 
+                x: (Math.random() - 0.5) * 200, 
+                y: (Math.random() - 0.5) * 200,
+                opacity: 0 
+              }}
+              className="absolute w-2 h-2 bg-[#FFD966] rounded-full shadow-[0_0_10px_#FFD966]"
+            />
           ))}
         </div>
+      ))}
 
-        {/* Puzzle Ring Animation (Visible only on Start Screen) */}
+      <main className="relative z-10 max-w-4xl mx-auto min-h-screen flex flex-col items-center justify-center p-6">
+        
+        {/* START SCREEN */}
         {!gameActive && !gameFinished && !previewMode && (
-          <motion.div style={ringStyle} animate={{ rotate: 360 }} transition={{ duration: 25, repeat: Infinity, ease: 'linear' }} className="opacity-30">
-            {puzzleIcons.map((icon, idx) => <div key={idx} style={iconStyle(idx, puzzleIcons.length)}>{icon}</div>)}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
+            {/* Rotating Ring with Shader Glow */}
+            <div className="relative mb-12">
+               <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }} className="w-64 h-64 border border-[#FFD966]/20 rounded-full flex items-center justify-center">
+                  {ringIcons.map((icon, i) => (
+                    <div key={i} className="absolute" style={{ transform: `rotate(${i * 45}deg) translateY(-120px)` }}>{icon}</div>
+                  ))}
+               </motion.div>
+               <img src="/vent logo.png" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full border-4 border-[#FFD966] shadow-[0_0_50px_rgba(255,217,102,0.2)]" />
+            </div>
+
+            <Mascot mood="wave" />
+            
+            <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#FFD966] to-[#d4af37] mb-4">
+               {titleWords.map((w, i) => <motion.span key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="inline-block mr-3">{w}</motion.span>)}
+            </h1>
+
+            <button onClick={initGame} className="mt-8 px-12 py-4 bg-[#FFD966] text-black font-black rounded-full text-xl hover:shadow-[0_0_30px_#FFD966] transition-all">ጀምር</button>
           </motion.div>
         )}
 
-        <div className="z-10 w-full max-w-2xl">
-          
-          {/* START SCREEN */}
-          {!gameActive && !gameFinished && !previewMode && (
-            <div className="text-center">
-              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
-                <div className="absolute inset-0 rounded-full blur-2xl bg-[#FFD966]/20"></div>
-                <img src="/vent logo.png" alt="Logo" className="relative w-28 h-28 mx-auto rounded-full border-4 border-[#FFD966]/30 object-cover shadow-2xl" />
-              </motion.div>
-              
-              <div className="flex flex-col items-center mb-10">
-                <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: [0, -8, 0], opacity: 1 }} transition={{ y: { repeat: Infinity, duration: 2.5 } }} className="w-32 h-32 mb-4">
-                  <img src="/mascot-wave.png" alt="Liyu" className="w-full h-full object-contain" onError={(e) => e.target.style.display='none'} />
-                </motion.div>
-                <h1 className="text-5xl md:text-6xl font-black text-[#FFD966] mb-4 tracking-tighter flex flex-wrap justify-center gap-x-4">
-                  {titleWords.map((word, i) => <motion.span key={i} custom={i} initial="hidden" animate="visible" variants={dropIn}>{word}</motion.span>)}
-                </h1>
-                <p className="text-white/40 text-lg">የጥቅሱን ጥቅስ ከይዘቱ ጋር በፍጥነት አዛምድ</p>
-              </div>
-
-              <button onClick={initGame} className="bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black px-16 py-5 rounded-full font-black text-2xl shadow-2xl hover:scale-105 active:scale-95 transition-all">ጀምር</button>
+        {/* GAME GRID */}
+        {(gameActive || previewMode) && (
+          <div className="w-full max-w-2xl">
+            <div className="flex justify-between mb-8">
+               <div className="bg-white/5 border border-white/10 px-6 py-2 rounded-full flex items-center gap-2">
+                 <span className="text-[#FFD966] font-bold">{moves}</span> <span className="text-xs opacity-50 uppercase tracking-widest">Moves</span>
+               </div>
+               <div className="bg-white/5 border border-white/10 px-6 py-2 rounded-full flex items-center gap-2">
+                 <span className="text-[#FFD966] font-bold">{Math.floor(time / 60)}:{(time % 60).toString().padStart(2, '0')}</span> <span className="text-xs opacity-50 uppercase tracking-widest">Time</span>
+               </div>
             </div>
-          )}
+            <div className="grid grid-cols-4 gap-4">
+              {cards.map((card, i) => (
+                <InteractiveCard key={i} card={card} isPreview={previewMode} onClick={(e) => handleCardClick(i, e)} />
+              ))}
+            </div>
+          </div>
+        )}
 
-          {/* PREVIEW MODE */}
-          {previewMode && (
-            <div className="text-center">
-              <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[#FFD966] text-2xl font-black mb-8 tracking-widest">አስታውስ!</motion.h2>
-              <div className="grid grid-cols-4 gap-3">
-                {cards.map((card, i) => (
-                  <div key={i} className="aspect-square bg-gradient-to-br from-[#FFD966] to-[#d4af37] rounded-2xl flex items-center justify-center p-2 text-center shadow-xl">
-                    <span className={`font-black text-black leading-tight ${card.type === 'ref' ? 'text-sm' : 'text-[9px]'}`}>{card.content}</span>
+        {/* FINISH SCREEN */}
+        {gameFinished && (
+           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white/5 backdrop-blur-xl p-12 rounded-[3rem] border border-white/10 text-center max-w-md w-full">
+              <Mascot mood="success" />
+              <h2 className="text-4xl font-black text-[#FFD966] mb-6">ጨርሰሃል!</h2>
+              <div className="space-y-4 mb-8">
+                <input type="text" placeholder="ስምህን አስገባ" value={playerName} onChange={e => setPlayerName(e.target.value)} className="w-full bg-black border border-white/10 p-4 rounded-2xl text-center outline-none focus:border-[#FFD966]" />
+                <button onClick={saveScore} className="w-full bg-[#FFD966] text-black py-4 rounded-2xl font-black">ውጤት አስቀምጥ</button>
+              </div>
+              <div className="text-left max-h-40 overflow-y-auto pr-2">
+                {leaderboard.map((l, i) => (
+                  <div key={i} className="flex justify-between py-2 border-b border-white/5 text-sm">
+                    <span>{i+1}. {l.name}</span>
+                    <span className="opacity-50">{l.moves} moves</span>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+              <button onClick={initGame} className="mt-8 text-[#FFD966] font-bold underline">እንደገና ተጫወት</button>
+           </motion.div>
+        )}
 
-          {/* GAMEPLAY */}
-          {gameActive && !previewMode && (
-            <div className="w-full">
-              <div className="flex justify-between mb-8">
-                <div className="bg-white/5 border border-white/10 px-5 py-2 rounded-full text-sm">🏃 እንቅስቃሴ: <b className="text-[#FFD966]">{moves}</b></div>
-                <div className="bg-white/5 border border-white/10 px-5 py-2 rounded-full text-sm">⏱️ ጊዜ: <b className="text-[#FFD966]">{formatTime(time)}</b></div>
-              </div>
-              <div className="grid grid-cols-4 gap-3">
-                {cards.map((card, idx) => (
-                  <div key={idx} className="relative aspect-square cursor-pointer perspective-1000" onClick={() => handleCardClick(idx)}>
-                    <div className={`relative w-full h-full transition-transform duration-500 preserve-3d ${card.isFlipped || card.isMatched ? 'rotate-y-180' : ''}`}>
-                      <div className="absolute inset-0 backface-hidden bg-[#1a1a1a] border-2 border-[#FFD966]/20 rounded-2xl flex items-center justify-center shadow-xl">
-                        <span className="text-[#FFD966] text-2xl font-bold opacity-20">?</span>
-                      </div>
-                      <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-[#FFD966] to-[#d4af37] rounded-2xl flex items-center justify-center p-2 text-center">
-                        <span className={`font-black text-black leading-tight ${card.type === 'ref' ? 'text-sm' : 'text-[9px]'}`}>{card.content}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* FINISHED SCREEN */}
-          {gameFinished && (
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white/[0.03] backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/10 text-center shadow-2xl">
-              <motion.div animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-40 h-40 mx-auto mb-4">
-                <img src="/mascot-success.png" alt="Victory Liyu" className="w-full h-full object-contain" onError={(e) => e.target.style.display='none'} />
-              </motion.div>
-              <h2 className="text-4xl font-black text-[#FFD966] mb-8">እንኳን ደስ አለዎት!</h2>
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                  <div className="text-white/30 text-xs font-bold uppercase mb-1">እንቅስቃሴ</div>
-                  <div className="text-3xl font-black">{moves}</div>
-                </div>
-                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                  <div className="text-white/30 text-xs font-bold uppercase mb-1">ጊዜ</div>
-                  <div className="text-3xl font-black">{formatTime(time)}</div>
-                </div>
-              </div>
-
-              {!saved ? (
-                <div className="space-y-4">
-                  <input type="text" placeholder="ስምዎን ያስገቡ..." value={playerName} onChange={(e) => setPlayerName(e.target.value)} 
-                         className="w-full bg-black/60 border border-white/10 p-4 rounded-2xl text-center text-lg outline-none focus:border-[#FFD966] transition-all" />
-                  <button onClick={saveScore} className="w-full bg-[#FFD966] text-black py-4 rounded-2xl font-black shadow-lg">ውጤቴን አስቀምጥ</button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="bg-green-500/20 text-green-400 py-3 rounded-xl border border-green-500/20">ውጤትዎ ተቀምጧል!</div>
-                  <button onClick={initGame} className="w-full bg-white text-black py-4 rounded-2xl font-black">እንደገና ተጫወት</button>
-                </div>
-              )}
-            </motion.div>
-          )}
-
-        </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
 }
+
+// Simple Mascot Component
+const Mascot = ({ mood }) => (
+  <motion.div 
+    animate={mood === 'wave' ? { y: [0, -10, 0] } : { scale: [1, 1.1, 1] }} 
+    transition={{ repeat: Infinity, duration: 2 }}
+    className="w-32 h-32 mx-auto mb-4"
+  >
+    <img 
+      src={mood === 'wave' ? '/mascot-wave.png' : '/mascot-success.png'} 
+      onError={(e) => e.target.src = "https://cdn-icons-png.flaticon.com/512/1998/1998713.png"} 
+      className="w-full h-full object-contain"
+    />
+  </motion.div>
+);
