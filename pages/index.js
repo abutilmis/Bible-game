@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import verses from '../data/verses.json';
 import Head from 'next/head';
 
@@ -75,6 +75,7 @@ export default function Home() {
   const [playerName, setPlayerName] = useState('');
   const [saved, setSaved] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [isSaving, setIsSaving] = useState(false); // loading state
   const [timerInterval, setTimerInterval] = useState(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [shake, setShake] = useState(false);
@@ -92,14 +93,20 @@ export default function Home() {
     } catch (e) {}
   };
 
-  useEffect(() => { fetchLeaderboard(); }, []);
+  useEffect(() => { 
+    fetchLeaderboard(); 
+  }, []);
 
   const fetchLeaderboard = async () => {
     try {
       const res = await fetch('/api/leaderboard');
+      if (!res.ok) throw new Error('Leaderboard API error');
       const data = await res.json();
       setLeaderboard(Array.isArray(data) ? data : []);
-    } catch (e) { setLeaderboard([]); }
+    } catch (e) { 
+      console.error('Leaderboard fetch error:', e);
+      setLeaderboard([]); 
+    }
   };
 
   const initGame = () => {
@@ -171,13 +178,37 @@ export default function Home() {
   };
 
   const saveScore = async () => {
-    if (!playerName.trim()) return alert('ስምዎን ያስገቡ');
-    const res = await fetch('/api/save-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: playerName, moves, time })
-    });
-    if (res.ok) { setSaved(true); fetchLeaderboard(); }
+    if (!playerName.trim()) {
+      alert('እባክዎ ስምዎን ያስገቡ');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/save-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: playerName.trim(), moves, time })
+      });
+      if (res.ok) {
+        setSaved(true);
+        await fetchLeaderboard(); // refresh leaderboard immediately
+      } else {
+        const errorText = await res.text();
+        console.error('Save score failed:', errorText);
+        alert(`ውጤት ማስቀመጥ አልተቻለም: ${errorText}`);
+      }
+    } catch (err) {
+      console.error('Network error:', err);
+      alert('የአውታረ መረብ ስህተት ተከስቷል');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
   const titleWords = "የመጽሐፍ ቅዱስ ትውስታ ጨዋታ".split(' ');
@@ -204,7 +235,6 @@ export default function Home() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 217, 102, 0.3); border-radius: 10px; }
 
-        /* Spinning dashed arc */
         @keyframes spin-slow {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
@@ -219,20 +249,12 @@ export default function Home() {
         .logo-arc-inner {
           animation: spin-reverse 8s linear infinite;
         }
-
-        /* Pulsing gold glow */
         @keyframes glow-pulse {
           0%, 100% { opacity: 0.35; transform: scale(1); }
           50%       { opacity: 0.65; transform: scale(1.08); }
         }
         .logo-glow {
           animation: glow-pulse 3s ease-in-out infinite;
-        }
-
-        /* Floating sparkle twinkle */
-        @keyframes twinkle {
-          0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
-          50%       { opacity: 1; transform: scale(1) rotate(180deg); }
         }
       `}</style>
 
@@ -469,9 +491,10 @@ export default function Home() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={saveScore} 
-                  className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation"
+                  disabled={isSaving}
+                  className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation disabled:opacity-50"
                 >
-                  ውጤት አስቀምጥ
+                  {isSaving ? 'በማስቀመጥ ላይ...' : 'ውጤት አስቀምጥ'}
                 </motion.button>
               </div>
 
@@ -482,19 +505,23 @@ export default function Home() {
                   <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Top Scores</p>
                 </div>
                 <div className="max-h-44 overflow-y-auto -webkit-overflow-scrolling-touch custom-scrollbar space-y-2 sm:space-y-3 pr-1">
-                  {leaderboard.map((l, i) => (
-                    <div key={i} className="flex justify-between items-center py-1">
-                      <span className="font-bold text-sm flex items-center gap-2 sm:gap-3 truncate mr-2">
-                        <span className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center rounded-full text-[9px] sm:text-[10px] ${i < 3 ? 'bg-[#FFD966] text-black' : 'bg-white/10 text-white/50'}`}>
-                          {i + 1}
+                  {leaderboard.length === 0 ? (
+                    <p className="text-white/40 text-sm text-center py-4">No scores yet. Be the first!</p>
+                  ) : (
+                    leaderboard.map((l, i) => (
+                      <div key={i} className="flex justify-between items-center py-1">
+                        <span className="font-bold text-sm flex items-center gap-2 sm:gap-3 truncate mr-2">
+                          <span className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center rounded-full text-[9px] sm:text-[10px] ${i < 3 ? 'bg-[#FFD966] text-black' : 'bg-white/10 text-white/50'}`}>
+                            {i + 1}
+                          </span>
+                          <span className="truncate">{l.name}</span>
                         </span>
-                        <span className="truncate">{l.name}</span>
-                      </span>
-                      <span className="text-[#FFD966] font-bold text-xs sm:text-sm opacity-80 flex-shrink-0">
-                        {l.moves} <span className="text-[9px] sm:text-[10px] opacity-40 ml-0.5">moves</span>
-                      </span>
-                    </div>
-                  ))}
+                        <span className="text-[#FFD966] font-bold text-xs sm:text-sm opacity-80 flex-shrink-0">
+                          {l.moves} <span className="text-[9px] sm:text-[10px] opacity-40 ml-0.5">moves</span>
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
               
