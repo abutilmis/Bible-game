@@ -478,27 +478,44 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Save score form */}
-              <div className="space-y-3 mb-8 w-full">
-                <input 
-                  type="text" 
-                  placeholder="ስምዎን ያስገቡ..." 
-                  value={playerName} 
-                  onChange={e => setPlayerName(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl sm:rounded-3xl text-center outline-none focus:border-[#FFD966]/50 focus:bg-white/10 transition-all text-white font-bold text-base sm:text-lg"
-                />
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={saveScore} 
-                  disabled={isSaving}
-                  className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation disabled:opacity-50"
-                >
-                  {isSaving ? 'በማስቀመጥ ላይ...' : 'ውጤት አስቀምጥ'}
-                </motion.button>
-              </div>
+              {!saved ? (
+                // Not saved yet – show input + save button
+                <div className="space-y-3 mb-8 w-full">
+                  <input 
+                    type="text" 
+                    placeholder="ስምዎን ያስገቡ..." 
+                    value={playerName} 
+                    onChange={e => setPlayerName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl sm:rounded-3xl text-center outline-none focus:border-[#FFD966]/50 focus:bg-white/10 transition-all text-white font-bold text-base sm:text-lg"
+                  />
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={saveScore} 
+                    disabled={isSaving}
+                    className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation disabled:opacity-50"
+                  >
+                    {isSaving ? 'በማስቀመጥ ላይ...' : 'ውጤት አስቀምጥ'}
+                  </motion.button>
+                </div>
+              ) : (
+                // Saved – show success message and Play Again button
+                <>
+                  <div className="bg-green-500/20 border border-green-500/30 text-green-400 py-4 rounded-2xl font-bold mb-6">
+                    ✅ ውጤትዎ በተሳካ ሁኔታ ተቀምጧል!
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={initGame}
+                    className="w-full bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black py-5 rounded-3xl font-black text-2xl shadow-lg shadow-[#FFD966]/20 mb-6"
+                  >
+                    🔄 እንደገና ተጫወት
+                  </motion.button>
+                </>
+              )}
 
-              {/* Leaderboard */}
+              {/* Leaderboard – shown after save as well */}
               <div className="text-left bg-black/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full">
                 <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-white/10 pb-2">
                   <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Leaderboard</p>
@@ -524,13 +541,16 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              
-              <button
-                onClick={initGame}
-                className="mt-8 sm:mt-10 text-[#FFD966] text-xs sm:text-sm font-black uppercase tracking-widest hover:tracking-[0.25em] transition-all duration-300 touch-manipulation py-2"
-              >
-                እንደገና ተጫወት
-              </button>
+
+              {/* For non‑saved state, also provide a "Play Again" option (optional) */}
+              {!saved && (
+                <button
+                  onClick={initGame}
+                  className="mt-6 text-white/50 text-xs sm:text-sm font-black uppercase tracking-widest hover:text-white/80 transition-all duration-300 touch-manipulation"
+                >
+                  እንደገና ተጫወት (ያለ ማስቀመጥ)
+                </button>
+              )}
             </motion.div>
           </div>
         )}
