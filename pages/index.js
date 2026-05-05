@@ -18,7 +18,7 @@ export default function Home() {
   const [particles, setParticles] = useState([]);
   const particleInterval = useRef(null);
 
-  // --- Sound effects (unchanged logic) ---
+  // --- Sound Effects Logic ---
   const playSound = (type) => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -94,7 +94,6 @@ export default function Home() {
           y: 80,
           size: 8 + Math.random() * 12,
           duration: 1.5 + Math.random() * 1.5,
-          delay: 0,
         }
       ]);
       setTimeout(() => {
@@ -106,22 +105,8 @@ export default function Home() {
   const initGame = () => {
     let deck = [];
     verses.forEach((pair, idx) => {
-      deck.push({
-        id: idx * 2,
-        pairId: idx,
-        type: 'ref',
-        content: pair.reference,
-        isFlipped: false,
-        isMatched: false,
-      });
-      deck.push({
-        id: idx * 2 + 1,
-        pairId: idx,
-        type: 'text',
-        content: pair.text,
-        isFlipped: false,
-        isMatched: false,
-      });
+      deck.push({ id: idx * 2, pairId: idx, type: 'ref', content: pair.reference, isFlipped: false, isMatched: false });
+      deck.push({ id: idx * 2 + 1, pairId: idx, type: 'text', content: pair.text, isFlipped: false, isMatched: false });
     });
     for (let i = deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -143,9 +128,7 @@ export default function Home() {
       setPreviewMode(false);
       setGameActive(true);
       if (timerInterval) clearInterval(timerInterval);
-      const interval = setInterval(() => {
-        setTime(prev => prev + 1);
-      }, 1000);
+      const interval = setInterval(() => setTime(prev => prev + 1), 1000);
       setTimerInterval(interval);
     }, 2000);
   };
@@ -157,7 +140,6 @@ export default function Home() {
     if (flippedIndices.length === 2) return;
 
     playSound('flip');
-
     const newCards = [...cards];
     newCards[idx].isFlipped = true;
     setCards(newCards);
@@ -167,9 +149,7 @@ export default function Home() {
     if (newFlipped.length === 2) {
       setMoves(m => m + 1);
       const [i1, i2] = newFlipped;
-      const card1 = newCards[i1];
-      const card2 = newCards[i2];
-      if (card1.pairId === card2.pairId) {
+      if (newCards[i1].pairId === newCards[i2].pairId) {
         playSound('match');
         newCards[i1].isMatched = true;
         newCards[i2].isMatched = true;
@@ -194,48 +174,31 @@ export default function Home() {
   };
 
   const saveScore = async () => {
-    if (!playerName.trim()) {
-      alert('እባክዎን ስምዎን ያስገቡ');
-      return;
-    }
+    if (!playerName.trim()) return alert('እባክዎን ስምዎን ያስገቡ');
     const res = await fetch('/api/save-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: playerName.trim(), moves, time })
     });
-    if (res.ok) {
-      setSaved(true);
-      await fetchLeaderboard();
-    } else {
-      alert('ውጤት ማስቀመጥ አልተቻለም');
-    }
+    if (res.ok) { setSaved(true); fetchLeaderboard(); }
   };
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+  const formatTime = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
-  // --- Animation Variants ---
+  // --- Visual Helper Variables ---
   const titleWords = "የመጽሐፍ ቅዱስ ትውስታ ጨዋታ".split(' ');
   const dropIn = {
     hidden: { y: -50, opacity: 0 },
-    visible: (i) => ({
-      y: 0, opacity: 1,
-      transition: { delay: i * 0.1, type: 'spring', stiffness: 300, damping: 20 }
-    })
+    visible: (i) => ({ y: 0, opacity: 1, transition: { delay: i * 0.1, type: 'spring', stiffness: 300, damping: 20 } })
   };
 
   const puzzleIcons = ['🧩', '🔑', '✨', '💎', '🪙', '📖', '⛪', '🌟'];
-  const ringStyle = {
-    position: 'absolute',
-    width: '280px',
-    height: '280px',
-    left: 'calc(50% - 140px)',
-    top: 'calc(50% - 140px)',
-    pointerEvents: 'none',
-  };
+  const ringStyle = { position: 'absolute', width: '280px', height: '280px', left: '50%', top: '50%', marginLeft: '-140px', marginTop: '-140px', pointerEvents: 'none' };
+  
   const iconStyle = (index, total) => {
     const angle = (index / total) * 360;
     const radius = 120;
@@ -249,233 +212,151 @@ export default function Home() {
     };
   };
 
-  // --- Reusable Components ---
-  const Card = ({ card, onClick, isPreview = false }) => (
-    <motion.div
-      whileHover={!card.isMatched && !isPreview ? { scale: 1.05, y: -5 } : {}}
-      whileTap={!card.isMatched && !isPreview ? { scale: 0.95 } : {}}
-      className="relative aspect-square cursor-pointer perspective-1000"
-      onClick={onClick}
-    >
-      <div className={`relative w-full h-full transition-transform duration-500 preserve-3d ${(card.isFlipped || card.isMatched || isPreview) ? 'rotate-y-180' : ''}`}>
-        {/* Back */}
-        <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-2 border-[#FFD966]/20 rounded-2xl flex items-center justify-center shadow-xl">
-          <div className="text-[#FFD966] text-4xl font-bold opacity-30 select-none">?</div>
-          <div className="absolute inset-2 border border-[#FFD966]/5 rounded-xl"></div>
-        </div>
-        {/* Front */}
-        <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-[#FFD966] to-[#d4af37] border-2 border-white/20 rounded-2xl flex items-center justify-center p-3 text-center shadow-2xl overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--tw-gradient-stops))] from-white/20 to-transparent opacity-50"></div>
-          <span className={`relative z-10 leading-tight font-bold ${card.type === 'ref' ? 'text-black text-sm sm:text-base' : 'text-black/80 text-[10px] sm:text-xs'}`}>
-            {card.content}
-          </span>
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  // ========== SCREEN RENDERING ==========
-
-  if (previewMode) {
+  // --- Sub-component: Card ---
+  const Card = ({ card, onClick, isPreview = false }) => {
+    const showFront = card.isFlipped || card.isMatched || isPreview;
     return (
-      <div className="min-h-screen bg-[#090909] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#151515] to-[#090909] flex flex-col items-center justify-center p-6 font-inter">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8 text-center">
-          <h2 className="text-[#FFD966] text-2xl font-bold tracking-widest uppercase">ማስታወሻ ጊዜ</h2>
-          <div className="h-1 w-24 bg-[#FFD966] mx-auto mt-2 rounded-full shadow-[0_0_10px_#FFD966]"></div>
-        </motion.div>
-        <div className="grid grid-cols-4 gap-3 max-w-2xl w-full">
-          {cards.map((card, idx) => (
-            <Card key={idx} card={card} isPreview={true} />
-          ))}
+      <div className="relative aspect-square cursor-pointer card-container" onClick={onClick}>
+        <div className={`card-inner ${showFront ? 'is-flipped' : ''}`}>
+          {/* Back Side */}
+          <div className="card-face card-back bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-2 border-[#FFD966]/20 rounded-2xl flex items-center justify-center shadow-xl">
+            <div className="text-[#FFD966] text-4xl font-bold opacity-30 select-none">?</div>
+            <div className="absolute inset-2 border border-[#FFD966]/5 rounded-xl"></div>
+          </div>
+          {/* Front Side */}
+          <div className="card-face card-front bg-gradient-to-br from-[#FFD966] to-[#d4af37] border-2 border-white/20 rounded-2xl flex items-center justify-center p-3 text-center shadow-2xl overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--tw-gradient-stops))] from-white/20 to-transparent opacity-50"></div>
+            <span className={`relative z-10 leading-tight font-black text-black ${card.type === 'ref' ? 'text-sm sm:text-base' : 'text-[9px] sm:text-xs'}`}>
+              {card.content}
+            </span>
+          </div>
         </div>
       </div>
     );
-  }
-
-  if (gameActive) {
-    return (
-      <div className="min-h-screen bg-[#090909] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#151515] to-[#090909] flex flex-col items-center justify-center p-4 font-inter">
-        <div className="flex justify-between w-full max-w-2xl mb-8 px-2">
-          <div className="bg-white/5 border border-white/10 px-5 py-2 rounded-full flex items-center gap-3 backdrop-blur-sm">
-            <span className="text-[#FFD966] text-lg">🏃</span>
-            <span className="text-white/70 text-sm font-medium">እንቅስቃሴ: <b className="text-white text-base ml-1">{moves}</b></span>
-          </div>
-          <div className="bg-white/5 border border-white/10 px-5 py-2 rounded-full flex items-center gap-3 backdrop-blur-sm">
-            <span className="text-[#FFD966] text-lg">⏱️</span>
-            <span className="text-white/70 text-sm font-medium">ጊዜ: <b className="text-white text-base ml-1">{formatTime(time)}</b></span>
-          </div>
-        </div>
-        <div className="grid grid-cols-4 gap-3 sm:gap-4 max-w-2xl w-full">
-          {cards.map((card, idx) => (
-            <Card key={idx} card={card} onClick={() => handleCardClick(idx)} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (gameFinished) {
-    return (
-      <div className="min-h-screen bg-[#090909] flex items-center justify-center p-6 font-inter">
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0 }} 
-          animate={{ scale: 1, opacity: 1 }} 
-          className="bg-white/[0.03] backdrop-blur-xl rounded-[2rem] p-8 md:p-12 max-w-lg w-full text-center border border-white/10 shadow-2xl relative overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#FFD966] to-transparent"></div>
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="text-6xl mb-6">🏆</motion.div>
-          <h2 className="text-4xl font-black text-[#FFD966] mb-8 tracking-tight">እንኳን ደስ አለዎት!</h2>
-          
-          <div className="flex gap-4 mb-8">
-            <div className="flex-1 bg-white/5 rounded-2xl p-4 border border-white/5">
-              <div className="text-white/40 text-xs uppercase font-bold tracking-widest mb-1">እንቅስቃሴ</div>
-              <div className="text-3xl font-black text-white">{moves}</div>
-            </div>
-            <div className="flex-1 bg-white/5 rounded-2xl p-4 border border-white/5">
-              <div className="text-white/40 text-xs uppercase font-bold tracking-widest mb-1">ጊዜ</div>
-              <div className="text-3xl font-black text-white">{formatTime(time)}</div>
-            </div>
-          </div>
-
-          {!saved ? (
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="ስምዎን ያስገቡ..."
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                className="w-full p-4 rounded-2xl bg-black/40 text-white border border-white/10 focus:border-[#FFD966] outline-none transition-all text-center text-lg placeholder:text-white/20"
-              />
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={saveScore} className="flex-[2] bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black py-4 rounded-2xl font-black shadow-lg shadow-[#FFD966]/20 active:scale-95 transition-transform">
-                  ውጤቴን አስቀምጥ
-                </button>
-                <button onClick={initGame} className="flex-1 bg-white/5 text-white py-4 rounded-2xl font-bold border border-white/10 hover:bg-white/10 transition-colors">
-                  እንደገና
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-8">
-              <div className="bg-green-500/10 border border-green-500/20 text-green-400 py-4 rounded-2xl font-bold">
-                ✅ ውጤትዎ በተሳካ ሁኔታ ተቀምጧል!
-              </div>
-              <div className="text-left">
-                <h3 className="text-[#FFD966] font-black text-xl mb-4 flex items-center gap-2">🏆 ከፍተኛ ውጤቶች</h3>
-                <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
-                  {leaderboard.map((entry, idx) => (
-                    <div key={idx} className={`flex justify-between items-center px-6 py-4 border-b border-white/5 ${idx === 0 ? 'bg-[#FFD966]/10' : idx % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
-                      <span className="text-white/90 font-medium"><span className="text-[#FFD966] mr-3 font-mono">#{idx+1}</span> {entry.name}</span>
-                      <span className="text-white/40 text-sm font-mono">{entry.moves} moves • {formatTime(entry.time)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <button onClick={initGame} className="w-full bg-white text-black py-4 rounded-2xl font-black active:scale-95 transition-transform">እንደገና ጨዋታ</button>
-            </div>
-          )}
-        </motion.div>
-      </div>
-    );
-  }
+  };
 
   return (
     <>
       <Head>
         <title>የመጽሐፍ ቅዱስ ትውስታ ጨዋታ</title>
-        <meta name="description" content="Bible Memory Match - Amharic Edition" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet" />
       </Head>
+
       <style jsx global>{`
-        .perspective-1000 { perspective: 1000px; }
-        .preserve-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-        .rotate-y-180 { transform: rotateY(180deg); }
+        .font-inter { font-family: 'Inter', sans-serif; }
+        .card-container { perspective: 1000px; }
+        .card-inner {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+          transform-style: preserve-3d;
+        }
+        .card-inner.is-flipped { transform: rotateY(180deg); }
+        .card-face {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+          border-radius: 1rem;
+        }
+        .card-front { transform: rotateY(180deg); }
       `}</style>
-      <div className="min-h-screen bg-[#090909] bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[#090909] to-[#050505] flex items-center justify-center p-6 relative overflow-hidden font-inter">
+
+      <div className="min-h-screen bg-[#090909] bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[#090909] to-[#050505] flex items-center justify-center p-4 relative overflow-hidden font-inter">
         
-        {/* Particle System */}
-        {particles.map(p => (
-          <motion.div
-            key={p.id}
-            initial={{ y: '80vh', x: `${p.x}%`, opacity: 1, scale: 0.5 }}
-            animate={{ y: '-20vh', opacity: 0, scale: 1.2 }}
-            transition={{ duration: p.duration, ease: 'easeOut' }}
-            className="absolute text-yellow-400 pointer-events-none z-0"
-            style={{ left: `${p.x}%`, bottom: 0, fontSize: p.size }}
-          >
-            🪙
-          </motion.div>
-        ))}
-
-        {/* Hero Background Ring */}
-        <motion.div
-          style={ringStyle}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-          className="opacity-40"
-        >
-          {puzzleIcons.map((icon, idx) => (
-            <div key={idx} style={iconStyle(idx, puzzleIcons.length)} className="absolute">
-              {icon}
-            </div>
+        {/* Floating Particles */}
+        <AnimatePresence>
+          {particles.map(p => (
+            <motion.div
+              key={p.id}
+              initial={{ y: '80vh', x: `${p.x}%`, opacity: 1, scale: 0.5 }}
+              animate={{ y: '-20vh', opacity: 0, scale: 1.2 }}
+              transition={{ duration: p.duration, ease: 'easeOut' }}
+              className="absolute text-yellow-400 pointer-events-none z-0"
+              style={{ left: `${p.x}%`, bottom: 0, fontSize: p.size }}
+            >🪙</motion.div>
           ))}
-        </motion.div>
+        </AnimatePresence>
 
-        <div className="text-center max-w-xl w-full z-10">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.8, type: 'spring' }}
-            className="mb-10"
-          >
-            <div className="relative inline-block">
-              <div className="absolute inset-0 rounded-full blur-2xl bg-[#FFD966]/20"></div>
-              <img src="/vent logo.png" alt="Logo" className="relative w-32 h-32 mx-auto rounded-full shadow-2xl border-4 border-[#FFD966]/30 object-cover" />
-            </div>
+        {/* Start Screen Ring */}
+        {!gameActive && !gameFinished && !previewMode && (
+          <motion.div style={ringStyle} animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: 'linear' }} className="opacity-40">
+            {puzzleIcons.map((icon, idx) => <div key={idx} style={iconStyle(idx, puzzleIcons.length)}>{icon}</div>)}
           </motion.div>
+        )}
 
-          <div className="mb-10">
-            <h1 className="text-5xl md:text-6xl font-black text-[#FFD966] mb-6 flex flex-wrap justify-center gap-x-4 tracking-tighter drop-shadow-2xl">
-              {titleWords.map((word, i) => (
-                <motion.span key={i} custom={i} initial="hidden" animate="visible" variants={dropIn} className="inline-block">
-                  {word}
-                </motion.span>
-              ))}
-            </h1>
-            <p className="text-white/40 text-lg md:text-xl font-medium tracking-wide max-w-md mx-auto">
-              የጥቅሱን ጥቅስ ከይዘቱ ጋር በፍጥነት አዛምድ
-            </p>
-          </div>
+        {/* Content Layers */}
+        <div className="z-10 w-full max-w-2xl">
+          
+          {/* 1. Preview Screen */}
+          {previewMode && (
+             <div className="flex flex-col items-center">
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8 text-[#FFD966] text-2xl font-black uppercase tracking-widest text-center">ማስታወሻ ጊዜ...</motion.div>
+                <div className="grid grid-cols-4 gap-2 sm:gap-4 w-full">{cards.map((c, i) => <Card key={i} card={c} isPreview />)}</div>
+             </div>
+          )}
 
-          <motion.button
-            whileHover={{ scale: 1.05, boxShadow: '0 0 40px rgba(255, 217, 102, 0.3)' }}
-            whileTap={{ scale: 0.95 }}
-            onClick={initGame}
-            className="bg-gradient-to-r from-[#FFD966] via-[#f7e4a1] to-[#d4af37] text-black px-16 py-5 rounded-full font-black text-2xl shadow-2xl transition-all"
-          >
-            ጀምር
-          </motion.button>
+          {/* 2. Active Gameplay */}
+          {gameActive && !previewMode && (
+            <div className="flex flex-col items-center">
+               <div className="flex justify-between w-full mb-8 px-2">
+                  <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md text-white/70 text-sm">🏃 እንቅስቃሴ: <b className="text-white ml-1">{moves}</b></div>
+                  <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md text-white/70 text-sm">⏱️ ጊዜ: <b className="text-white ml-1">{formatTime(time)}</b></div>
+               </div>
+               <div className="grid grid-cols-4 gap-2 sm:gap-4 w-full">{cards.map((c, i) => <Card key={i} card={c} onClick={() => handleCardClick(i)} />)}</div>
+            </div>
+          )}
 
-          {/* Leaderboard Summary */}
-          <div className="mt-16 text-left bg-white/[0.02] border border-white/5 rounded-[2rem] p-8 backdrop-blur-md">
-            <h3 className="text-[#FFD966] font-black text-xl mb-6 flex items-center gap-3">🏆 ከፍተኛ ውጤቶች</h3>
-            {leaderboard.length === 0 ? (
-              <p className="text-white/20 italic">ገና ምንም ውጤቶች አልተመዘገቡም...</p>
-            ) : (
-              <div className="space-y-3">
-                {leaderboard.slice(0, 5).map((entry, idx) => (
-                  <div key={idx} className={`flex justify-between items-center p-4 rounded-2xl border ${idx === 0 ? 'bg-[#FFD966]/10 border-[#FFD966]/20' : 'bg-white/5 border-transparent'}`}>
-                    <span className="text-white font-bold flex items-center gap-4">
-                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs ${idx === 0 ? 'bg-[#FFD966] text-black' : 'bg-white/10'}`}>{idx+1}</span>
-                      {entry.name}
-                    </span>
-                    <span className="text-white/40 font-mono text-sm">{entry.moves} moves • {formatTime(entry.time)}</span>
+          {/* 3. Game Finished / Leaderboard */}
+          {gameFinished && (
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white/[0.03] backdrop-blur-xl rounded-[2rem] p-8 text-center border border-white/10 shadow-2xl">
+                <div className="text-6xl mb-6">🏆</div>
+                <h2 className="text-3xl font-black text-[#FFD966] mb-8">ጨዋታው ተጠናቋል!</h2>
+                <div className="flex gap-4 mb-8">
+                  <div className="flex-1 bg-white/5 rounded-2xl p-4 border border-white/5"><div className="text-white/40 text-xs font-bold uppercase mb-1">እንቅስቃሴ</div><div className="text-3xl font-black text-white">{moves}</div></div>
+                  <div className="flex-1 bg-white/5 rounded-2xl p-4 border border-white/5"><div className="text-white/40 text-xs font-bold uppercase mb-1">ጊዜ</div><div className="text-3xl font-black text-white">{formatTime(time)}</div></div>
+                </div>
+                {!saved ? (
+                  <div className="space-y-4">
+                    <input type="text" placeholder="ስምዎን ያስገቡ..." value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="w-full p-4 rounded-2xl bg-black/40 text-white border border-white/10 focus:border-[#FFD966] outline-none text-center" />
+                    <button onClick={saveScore} className="w-full bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black py-4 rounded-2xl font-black shadow-lg">ውጤቴን አስቀምጥ</button>
+                    <button onClick={initGame} className="w-full text-white/40 hover:text-white transition-colors">እንደገና ጨዋታ</button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ) : (
+                  <div className="space-y-6 text-left">
+                    <div className="bg-green-500/10 border border-green-500/20 text-green-400 py-4 rounded-2xl font-bold text-center">✅ ውጤትዎ ተቀምጧል!</div>
+                    <div className="bg-black/30 rounded-2xl p-5 border border-white/5">
+                        <h3 className="text-[#FFD966] font-black mb-4">ከፍተኛ ውጤቶች</h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                          {leaderboard.map((e, idx) => (
+                            <div key={idx} className="flex justify-between text-sm py-2 border-b border-white/5 last:border-0">
+                              <span className="text-white/80">{idx+1}. {e.name}</span>
+                              <span className="text-white/40 font-mono">{e.moves} moves • {formatTime(e.time)}</span>
+                            </div>
+                          ))}
+                        </div>
+                    </div>
+                    <button onClick={initGame} className="w-full bg-white text-black py-4 rounded-2xl font-black active:scale-95 transition-all">እንደገና ጨዋታ</button>
+                  </div>
+                )}
+            </motion.div>
+          )}
+
+          {/* 4. Start Screen */}
+          {!gameActive && !gameFinished && !previewMode && (
+            <div className="text-center">
+              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-10">
+                <img src="/vent logo.png" alt="Logo" className="w-32 h-32 mx-auto rounded-full shadow-2xl border-4 border-[#FFD966]/30 object-cover bg-black" />
+              </motion.div>
+              <h1 className="text-4xl md:text-6xl font-black text-[#FFD966] mb-6 flex flex-wrap justify-center gap-x-4">
+                {titleWords.map((word, i) => <motion.span key={i} custom={i} initial="hidden" animate="visible" variants={dropIn}>{word}</motion.span>)}
+              </h1>
+              <p className="text-white/40 text-lg mb-10">የጥቅሱን ጥቅስ ከይዘቱ ጋር በፍጥነት አዛምድ</p>
+              <button onClick={initGame} className="bg-gradient-to-r from-[#FFD966] via-[#f7e4a1] to-[#d4af37] text-black px-16 py-5 rounded-full font-black text-2xl shadow-2xl active:scale-95 transition-all">ጀምር</button>
+            </div>
+          )}
         </div>
       </div>
     </>
