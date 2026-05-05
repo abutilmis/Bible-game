@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import verses from '../data/verses.json';
-
+import Head from 'next/head';
 export default function Home() {
   const [cards, setCards] = useState([]);
   const [flippedIndices, setFlippedIndices] = useState([]);
@@ -135,10 +135,15 @@ export default function Home() {
 
   if (!gameActive && !gameFinished) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#090909] to-[#151515] flex items-center justify-center p-4">
+      <>
+        <Head>
+          <title>Bible Game</title>
+          <meta name="description" content="Match Bible verses with their texts – a fun memory game in Amharic" />
+        </Head>
+        <div className="min-h-screen bg-gradient-to-br from-[#090909] to-[#151515] flex items-center justify-center p-4">
         <div className="text-center max-w-md w-full">
-          <h1 className="text-4xl font-bold text-[#FFD966] mb-2">📖 የመጽሐፍ ቅዱስ ትውስታ ጨዋታ</h1>
-          <p className="text-white/70 mb-6">የጥቅሱን ጥቅስ ከይዘቱ ጋር አዛምድ</p>
+          <h1 className="text-4xl font-bold text-[#FFD966] mb-2"> የመጽሐፍ ቅዱስ ጨዋታ</h1>
+          <p className="text-white/70 mb-6">የጥቅሱን ቁጥር ከይዘቱ ጋር አዛምድ</p>
           <button onClick={initGame} className="bg-[#FFD966] text-[#1e3c2c] px-8 py-3 rounded-full font-bold text-lg">ጀምር</button>
           <div className="mt-8 text-left bg-white/10 rounded-xl p-4">
             <h3 className="text-[#FFD966] font-bold text-lg">🏆 ከፍተኛ ውጤቶች</h3>
@@ -155,8 +160,9 @@ export default function Home() {
           </div>
         </div>
       </div>
-    );
-  }
+    </>
+  );
+}
 
   if (gameFinished) {
     return (
