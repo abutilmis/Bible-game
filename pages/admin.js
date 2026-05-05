@@ -94,12 +94,29 @@ export default function Admin() {
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-[#FFD966]">Admin Dashboard</h1>
-            <button
-              onClick={fetchScores}
-              className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-sm transition"
-            >
-              ↻ Refresh
-            </button>
+            <div className="flex gap-3">
+                <button
+                onClick={fetchScores}
+                className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-sm transition"
+                >
+                ↻ Refresh
+                </button>
+                <button
+                onClick={async () => {
+                    if (!confirm('⚠️ WARNING: This will delete ALL scores. This action cannot be undone. Are you sure?')) return;
+                    const res = await fetch(`/api/admin/delete-all-scores?secret=${ADMIN_SECRET}`, { method: 'DELETE' });
+                    if (res.ok) {
+                    alert('All scores deleted');
+                    fetchScores();
+                    } else {
+                    alert('Failed to delete scores');
+                    }
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full text-sm transition"
+                >
+                🗑 Delete All
+                </button>
+            </div>
           </div>
           {scores.length === 0 ? (
             <div className="text-white/70 text-center p-8">No scores yet.</div>
