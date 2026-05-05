@@ -181,7 +181,6 @@ export default function Home() {
   };
 
   const titleWords = "የመጽሐፍ ቅዱስ ትውስታ ጨዋታ".split(' ');
-  const ringIcons = ['📖', '✨', '🙏', '🔥', '💎', '⛪', '🕊️', '👑'];
 
   return (
     <div className={`min-h-screen bg-[#050505] text-white font-inter overflow-x-hidden selection:bg-[#FFD966] selection:text-black transition-all duration-100 ${shake ? 'rotate-[-0.5deg] scale-[1.01]' : ''}`}>
@@ -204,6 +203,37 @@ export default function Home() {
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 217, 102, 0.3); border-radius: 10px; }
+
+        /* Spinning dashed arc */
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes spin-reverse {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(-360deg); }
+        }
+        .logo-arc-outer {
+          animation: spin-slow 12s linear infinite;
+        }
+        .logo-arc-inner {
+          animation: spin-reverse 8s linear infinite;
+        }
+
+        /* Pulsing gold glow */
+        @keyframes glow-pulse {
+          0%, 100% { opacity: 0.35; transform: scale(1); }
+          50%       { opacity: 0.65; transform: scale(1.08); }
+        }
+        .logo-glow {
+          animation: glow-pulse 3s ease-in-out infinite;
+        }
+
+        /* Floating sparkle twinkle */
+        @keyframes twinkle {
+          0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+          50%       { opacity: 1; transform: scale(1) rotate(180deg); }
+        }
       `}</style>
 
       {/* Background Ambience */}
@@ -241,7 +271,7 @@ export default function Home() {
         </div>
       ))}
 
-      <main className="relative z-10 w-full min-h-screen flex flex-col items-center p-6 md:p-12">
+      <main className="relative z-10 w-full min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-12">
         
         {/* START SCREEN */}
         {!gameActive && !gameFinished && !previewMode && (
@@ -249,66 +279,114 @@ export default function Home() {
             <motion.div 
               initial={{ opacity: 0, y: 30 }} 
               animate={{ opacity: 1, y: 0 }} 
-              className="text-center w-full max-w-2xl py-10 px-8 sm:px-12 rounded-[4rem] glass-panel relative overflow-hidden"
+              className="text-center w-full max-w-lg py-8 sm:py-10 px-6 sm:px-12 rounded-[3rem] sm:rounded-[4rem] glass-panel relative overflow-hidden"
             >
-              {/* Floating Sparkles */}
-              {[...Array(6)].map((_, i) => (
-                 <motion.div 
-                    key={i} 
-                    animate={{ 
-                        opacity: [0, 1, 0], 
-                        y: [0, -40],
-                        x: [0, (i % 2 === 0 ? 10 : -10)] 
-                    }} 
-                    transition={{ duration: 3 + i, repeat: Infinity, delay: i * 0.7 }} 
-                    className="absolute text-[#FFD966]/40 text-lg select-none" 
-                    style={{ top: `${20 + Math.random()*60}%`, left: `${10 + Math.random()*80}%` }}
+              {/* Floating ambient sparkles */}
+              {[...Array(5)].map((_, i) => (
+                <motion.div 
+                  key={i}
+                  animate={{ opacity: [0, 1, 0], y: [0, -30], x: [0, (i % 2 === 0 ? 8 : -8)] }}
+                  transition={{ duration: 2.5 + i * 0.6, repeat: Infinity, delay: i * 0.8 }}
+                  className="absolute text-[#FFD966]/30 text-base select-none pointer-events-none"
+                  style={{ top: `${25 + i * 12}%`, left: `${8 + i * 18}%` }}
                 >
-                    ✨
+                  ✦
                 </motion.div>
               ))}
 
-              <div className="relative mb-10 flex justify-center items-center h-72">
-                 <motion.div 
-                    animate={{ rotate: 360 }} 
-                    transition={{ duration: 40, repeat: Infinity, ease: "linear" }} 
-                    className="absolute w-64 h-64 border border-[#FFD966]/10 rounded-full flex items-center justify-center"
-                 >
-                    {ringIcons.map((icon, i) => (
-                      <div 
-                        key={i} 
-                        className="absolute text-2xl filter drop-shadow-[0_0_8px_rgba(255,217,102,0.4)]" 
-                        style={{ transform: `rotate(${i * 45}deg) translateY(-145px)` }}
-                      >
-                        {icon}
-                      </div>
-                    ))}
-                 </motion.div>
-                 
-                 <motion.div 
-                    initial={{ scale: 0 }} 
-                    animate={{ scale: 1 }} 
-                    transition={{ type: 'spring', damping: 15 }}
-                    className="relative z-20"
-                 >
-                    <img 
-                        src="/vent logo.png" 
-                        className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#FFD966] shadow-[0_0_60px_rgba(255,217,102,0.25)] object-cover" 
-                        alt="Logo"
-                    />
-                 </motion.div>
+              {/* ── Logo with premium glow frame ── */}
+              <div className="relative flex justify-center items-center mb-6 sm:mb-8" style={{ height: '180px' }}>
+
+                {/* Layered glow halos */}
+                <div className="logo-glow absolute w-44 h-44 rounded-full bg-[#d4af37]/20 blur-2xl" />
+                <div
+                  className="logo-glow absolute w-36 h-36 rounded-full bg-[#FFD966]/15 blur-xl"
+                  style={{ animationDelay: '0.5s' }}
+                />
+
+                {/* Outer dashed arc (clockwise) */}
+                <svg
+                  className="logo-arc-outer absolute"
+                  width="176"
+                  height="176"
+                  viewBox="0 0 176 176"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="88"
+                    cy="88"
+                    r="82"
+                    stroke="#FFD966"
+                    strokeWidth="1.5"
+                    strokeOpacity="0.35"
+                    strokeDasharray="6 10"
+                    strokeLinecap="round"
+                  />
+                </svg>
+
+                {/* Inner dashed arc (counter-clockwise, offset dash) */}
+                <svg
+                  className="logo-arc-inner absolute"
+                  width="148"
+                  height="148"
+                  viewBox="0 0 148 148"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="74"
+                    cy="74"
+                    r="68"
+                    stroke="#FFD966"
+                    strokeWidth="1"
+                    strokeOpacity="0.2"
+                    strokeDasharray="3 14"
+                    strokeLinecap="round"
+                  />
+                </svg>
+
+                {/* Four cardinal sparkle dots */}
+                {[0, 90, 180, 270].map((deg, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ opacity: [0.2, 1, 0.2], scale: [0.6, 1.2, 0.6] }}
+                    transition={{ duration: 2, repeat: Infinity, delay: i * 0.5 }}
+                    className="absolute w-1.5 h-1.5 rounded-full bg-[#FFD966]"
+                    style={{
+                      top: `calc(50% + ${Math.round(Math.sin((deg * Math.PI) / 180) * 88)}px - 3px)`,
+                      left: `calc(50% + ${Math.round(Math.cos((deg * Math.PI) / 180) * 88)}px - 3px)`,
+                    }}
+                  />
+                ))}
+
+                {/* Logo image */}
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', damping: 15, delay: 0.1 }}
+                  className="relative z-20"
+                >
+                  <img 
+                    src="/vent logo.png" 
+                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 border-[#FFD966]/60 shadow-[0_0_40px_rgba(255,217,102,0.3),0_0_80px_rgba(212,175,55,0.15)] object-cover"
+                    alt="Logo"
+                  />
+                </motion.div>
               </div>
 
-              <div className="mb-8">
+              {/* Mascot */}
+              <div className="mb-6 sm:mb-8">
                 <Mascot mood="wave" />
               </div>
               
-              <div className="space-y-4 mb-12">
-                <h1 className="text-5xl sm:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-[#FFD966] via-[#fceabb] to-[#d4af37] drop-shadow-xl leading-[1.1]">
-                   {titleWords.join(' ')}
+              {/* Title & subtitle */}
+              <div className="space-y-3 mb-8 sm:mb-10">
+                <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-[#FFD966] via-[#fceabb] to-[#d4af37] drop-shadow-xl leading-[1.1]">
+                  {titleWords.join(' ')}
                 </h1>
-                <p className="text-[#FFD966]/70 text-lg sm:text-xl font-medium tracking-wide">
-                    ቃሉን በልብህ ለመያዝ የተዘጋጀ ጨዋታ
+                <p className="text-[#FFD966]/70 text-base sm:text-lg font-medium tracking-wide">
+                  ቃሉን በልብህ ለመያዝ የተዘጋጀ ጨዋታ
                 </p>
               </div>
 
@@ -316,7 +394,7 @@ export default function Home() {
                 onClick={initGame} 
                 whileHover={{ scale: 1.05, translateY: -2 }}
                 whileTap={{ scale: 0.95 }}
-                className="group relative px-20 py-6 bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black font-black rounded-3xl text-2xl shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] transition-all overflow-hidden"
+                className="group relative w-full sm:w-auto px-16 py-5 bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black font-black rounded-3xl text-xl sm:text-2xl shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] transition-all overflow-hidden"
               >
                 <span className="relative z-10">ጀምር</span>
                 <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 skew-x-12"></div>
@@ -351,63 +429,88 @@ export default function Home() {
 
         {/* FINISH SCREEN */}
         {gameFinished && (
-           <div className="my-auto w-full flex justify-center">
-             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-panel p-10 sm:p-14 rounded-[4rem] text-center max-w-lg w-full shadow-2xl">
-                <div className="mb-6 scale-125">
-                    <Mascot mood="success" />
-                </div>
-                <h2 className="text-5xl font-black text-[#FFD966] mb-3">ድንቅ ነው!</h2>
-                <p className="text-white/40 mb-10 text-sm font-bold uppercase tracking-[0.3em]">Game Complete</p>
-                
-                <div className="space-y-4 mb-10">
-                  <input 
-                    type="text" 
-                    placeholder="ስምዎን ያስገቡ..." 
-                    value={playerName} 
-                    onChange={e => setPlayerName(e.target.value)} 
-                    className="w-full bg-white/5 border border-white/10 p-5 rounded-3xl text-center outline-none focus:border-[#FFD966]/50 focus:bg-white/10 transition-all text-white font-bold text-lg" 
-                  />
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={saveScore} 
-                    className="w-full bg-[#FFD966] text-black py-5 rounded-3xl font-black text-xl shadow-lg shadow-[#FFD966]/10"
-                  >
-                    ውጤት አስቀምጥ
-                  </motion.button>
-                </div>
+          <div className="my-auto w-full flex justify-center px-2 sm:px-0">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="glass-panel p-6 sm:p-10 md:p-14 rounded-[2.5rem] sm:rounded-[4rem] text-center w-full max-w-lg shadow-2xl"
+            >
+              <div className="mb-5 scale-110">
+                <Mascot mood="success" />
+              </div>
 
-                <div className="text-left bg-black/40 border border-white/5 rounded-3xl p-6">
-                  <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
-                    <p className="text-[11px] opacity-40 font-black uppercase tracking-widest">Leaderboard</p>
-                    <p className="text-[11px] opacity-40 font-black uppercase tracking-widest">Top Scores</p>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-3 pr-2">
-                    {leaderboard.map((l, i) => (
-                      <div key={i} className="flex justify-between items-center py-1 group">
-                        <span className="font-bold text-sm sm:text-base flex items-center gap-3">
-                            <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] ${i < 3 ? 'bg-[#FFD966] text-black' : 'bg-white/10 text-white/50'}`}>
-                                {i + 1}
-                            </span>
-                            {l.name}
-                        </span>
-                        <span className="text-[#FFD966] font-bold text-sm opacity-80">
-                            {l.moves} <span className="text-[10px] opacity-40 ml-1">moves</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+              <h2 className="text-4xl sm:text-5xl font-black text-[#FFD966] mb-2">ድንቅ ነው!</h2>
+              <p className="text-white/40 mb-8 text-xs sm:text-sm font-bold uppercase tracking-[0.3em]">Game Complete</p>
+              
+              {/* Score summary */}
+              <div className="flex gap-3 justify-center mb-8">
+                <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-center flex-1">
+                  <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-1">Moves</span>
+                  <span className="text-[#FFD966] font-black text-2xl">{moves}</span>
                 </div>
-                
-                <button onClick={initGame} className="mt-10 text-[#FFD966] text-sm font-black uppercase tracking-widest hover:tracking-[0.25em] transition-all duration-300">
-                    እንደገና ተጫወት
-                </button>
-             </motion.div>
-           </div>
+                <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-center flex-1">
+                  <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-1">Time</span>
+                  <span className="text-[#FFD966] font-black text-2xl">
+                    {Math.floor(time / 60)}:{(time % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Save score form */}
+              <div className="space-y-3 mb-8 w-full">
+                <input 
+                  type="text" 
+                  placeholder="ስምዎን ያስገቡ..." 
+                  value={playerName} 
+                  onChange={e => setPlayerName(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl sm:rounded-3xl text-center outline-none focus:border-[#FFD966]/50 focus:bg-white/10 transition-all text-white font-bold text-base sm:text-lg"
+                />
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={saveScore} 
+                  className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation"
+                >
+                  ውጤት አስቀምጥ
+                </motion.button>
+              </div>
+
+              {/* Leaderboard */}
+              <div className="text-left bg-black/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full">
+                <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-white/10 pb-2">
+                  <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Leaderboard</p>
+                  <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Top Scores</p>
+                </div>
+                <div className="max-h-44 overflow-y-auto -webkit-overflow-scrolling-touch custom-scrollbar space-y-2 sm:space-y-3 pr-1">
+                  {leaderboard.map((l, i) => (
+                    <div key={i} className="flex justify-between items-center py-1">
+                      <span className="font-bold text-sm flex items-center gap-2 sm:gap-3 truncate mr-2">
+                        <span className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center rounded-full text-[9px] sm:text-[10px] ${i < 3 ? 'bg-[#FFD966] text-black' : 'bg-white/10 text-white/50'}`}>
+                          {i + 1}
+                        </span>
+                        <span className="truncate">{l.name}</span>
+                      </span>
+                      <span className="text-[#FFD966] font-bold text-xs sm:text-sm opacity-80 flex-shrink-0">
+                        {l.moves} <span className="text-[9px] sm:text-[10px] opacity-40 ml-0.5">moves</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <button
+                onClick={initGame}
+                className="mt-8 sm:mt-10 text-[#FFD966] text-xs sm:text-sm font-black uppercase tracking-widest hover:tracking-[0.25em] transition-all duration-300 touch-manipulation py-2"
+              >
+                እንደገና ተጫወት
+              </button>
+            </motion.div>
+          </div>
         )}
 
-        <footer className="mt-auto pt-12 pb-4 opacity-30 text-[10px] sm:text-xs uppercase tracking-[0.4em] font-black text-center">
-           © {new Date().getFullYear()} Vent Brand • Bible Memory Match
+        {/* Footer */}
+        <footer className="mt-auto pt-10 pb-4 opacity-25 text-[10px] uppercase tracking-[0.4em] font-black text-center">
+          Bible Game
         </footer>
 
       </main>
@@ -423,11 +526,11 @@ const Mascot = ({ mood }) => (
       scale: mood === 'success' ? [1, 1.1, 1] : 1
     }} 
     transition={{ 
-        repeat: Infinity, 
-        duration: mood === 'wave' ? 3 : 2, 
-        ease: "easeInOut" 
+      repeat: Infinity, 
+      duration: mood === 'wave' ? 3 : 2, 
+      ease: "easeInOut" 
     }}
-    className="w-32 h-32 sm:w-44 sm:h-44 mx-auto pointer-events-none drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)]"
+    className="w-28 h-28 sm:w-36 sm:h-36 mx-auto pointer-events-none drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)]"
   >
     <img 
       src={mood === 'wave' ? '/mascot-wave.png' : '/mascot-success.png'} 
