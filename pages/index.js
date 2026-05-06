@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import verses from '../data/verses.json';
 import Head from 'next/head';
+
+const TOTAL_TIME = 120; // seconds for countdown
 
 // --- Visual Juice Component: Tilt & Reflection ---
 const InteractiveCard = ({ card, onClick, isPreview }) => {
@@ -13,20 +15,14 @@ const InteractiveCard = ({ card, onClick, isPreview }) => {
   const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["15deg", "-15deg"]);
   const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-15deg", "15deg"]);
   const sheenX = useTransform(mouseXSpring, [-0.5, 0.5], ["0%", "100%"]);
-  const sheenOpacity = useTransform(mouseXSpring, [-0.5, 0.5], [0, 0.5]);
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    x.set(mouseX / rect.width - 0.5);
-    y.set(mouseY / rect.height - 0.5);
+    x.set((e.clientX - rect.left) / rect.width - 0.5);
+    y.set((e.clientY - rect.top) / rect.height - 0.5);
   };
 
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
+  const handleMouseLeave = () => { x.set(0); y.set(0); };
 
   const showFront = card.isFlipped || card.isMatched || isPreview;
 
@@ -46,7 +42,7 @@ const InteractiveCard = ({ card, onClick, isPreview }) => {
         <div className="absolute inset-0 backface-hidden bg-[#121212] border-2 border-[#FFD966]/20 rounded-2xl flex items-center justify-center shadow-2xl overflow-hidden">
            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#222_0%,_transparent_70%)] opacity-50"></div>
            <span className="text-[#FFD966] text-4xl font-black opacity-10">?</span>
-           <motion.div style={{ left: sheenX, opacity: sheenOpacity }} className="absolute top-0 w-1/2 h-full bg-white/5 skew-x-12 blur-xl pointer-events-none" />
+           <motion.div style={{ left: sheenX, opacity: 0.05 }} className="absolute top-0 w-1/2 h-full bg-white skew-x-12 blur-xl pointer-events-none" />
         </div>
 
         {/* Front Side (Gold Foil) */}
@@ -69,17 +65,22 @@ export default function Home() {
   const [cards, setCards] = useState([]);
   const [flippedIndices, setFlippedIndices] = useState([]);
   const [moves, setMoves] = useState(0);
-  const [time, setTime] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [gameActive, setGameActive] = useState(false);
-  const [gameFinished, setGameFinished] = useState(false);
+  // screen: 'start' | 'playing' | 'finished' | 'gameover'
+  const [screen, setScreen] = useState('start');
   const [playerName, setPlayerName] = useState('');
   const [saved, setSaved] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [isSaving, setIsSaving] = useState(false); // loading state
-  const [timerInterval, setTimerInterval] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [shake, setShake] = useState(false);
   const [bursts, setBursts] = useState([]);
+
+  // Use refs for things that need to be read inside intervals/timeouts
+  // without causing stale closures
+  const timerRef = useRef(null);
+  const gameActiveRef = useRef(false);
 
   const playSound = (type) => {
     try {
@@ -93,9 +94,28 @@ export default function Home() {
     } catch (e) {}
   };
 
-  useEffect(() => { 
-    fetchLeaderboard(); 
-  }, []);
+  useEffect(() => { fetchLeaderboard(); }, []);
+
+  // Countdown timer – ticks every second while gameActive is true
+  useEffect(() => {
+    if (!gameActive) return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          // Time's up
+          clearInterval(timerRef.current);
+          gameActiveRef.current = false;
+          setGameActive(false);
+          setScreen('gameover');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [gameActive]);
 
   const fetchLeaderboard = async () => {
     try {
@@ -109,7 +129,12 @@ export default function Home() {
     }
   };
 
+  const stopTimer = () => {
+    clearInterval(timerRef.current);
+  };
+
   const initGame = () => {
+    stopTimer();
     let deck = [];
     verses.forEach((pair, idx) => {
       deck.push({ id: idx * 2, pairId: idx, type: 'ref', content: pair.reference, isFlipped: false, isMatched: false });
@@ -118,12 +143,20 @@ export default function Home() {
     deck.sort(() => Math.random() - 0.5);
     setCards(deck);
     setFlippedIndices([]);
-    setMoves(0); setTime(0); setGameFinished(false); setSaved(false); setPreviewMode(true);
+    setMoves(0);
+    setTimeLeft(TOTAL_TIME);
+    setSaved(false);
+    setPlayerName('');
+    setScreen('playing');
+    setPreviewMode(true);
+    setGameActive(false);
+    gameActiveRef.current = false;
+
     setTimeout(() => {
-      setPreviewMode(false); setGameActive(true);
-      const interval = setInterval(() => setTime(prev => prev + 1), 1000);
-      setTimerInterval(interval);
-    }, 3000);
+      setPreviewMode(false);
+      setGameActive(true);
+      gameActiveRef.current = true;
+    }, 2000);
   };
 
   const triggerBurst = (x, y) => {
@@ -140,7 +173,7 @@ export default function Home() {
   };
 
   const handleCardClick = (idx, e) => {
-    if (!gameActive || previewMode || cards[idx].isFlipped || cards[idx].isMatched || flippedIndices.length === 2) return;
+    if (!gameActiveRef.current || previewMode || cards[idx].isFlipped || cards[idx].isMatched || flippedIndices.length === 2) return;
 
     playSound('flip');
     const newCards = [...cards];
@@ -156,15 +189,27 @@ export default function Home() {
         playSound('match');
         setShake(true);
         setTimeout(() => setShake(false), 200);
+
         const rect = e.currentTarget.getBoundingClientRect();
         triggerBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
         newCards[i1].isMatched = true;
         newCards[i2].isMatched = true;
-        setCards(newCards);
+        setCards([...newCards]);
         setFlippedIndices([]);
-        if (newCards.every(c => c.isMatched)) {
-          setGameActive(false); setGameFinished(true);
-          clearInterval(timerInterval);
+
+        const allMatched = newCards.every(c => c.isMatched);
+        if (allMatched) {
+          // Stop timer first, then transition screen after a brief settle delay
+          // to eliminate the flash between grid and finished screen.
+          stopTimer();
+          gameActiveRef.current = false;
+          setGameActive(false);
+          // Small delay lets the last card's flip animation complete before
+          // switching screens, eliminating the white-flash repaint.
+          setTimeout(() => {
+            setScreen('finished');
+          }, 400);
         }
       } else {
         setTimeout(() => {
@@ -178,38 +223,36 @@ export default function Home() {
   };
 
   const saveScore = async () => {
-    if (!playerName.trim()) {
-      alert('እባክዎ ስምዎን ያስገቡ');
-      return;
-    }
+    if (!playerName.trim()) { alert('እባክዎ ስምዎን ያስገቡ'); return; }
     setIsSaving(true);
     try {
+      const timeUsed = TOTAL_TIME - timeLeft;
       const res = await fetch('/api/save-score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: playerName.trim(), moves, time })
+        body: JSON.stringify({ name: playerName.trim(), moves, time: timeUsed })
       });
       if (res.ok) {
         setSaved(true);
-        await fetchLeaderboard(); // refresh leaderboard immediately
+        await fetchLeaderboard();
       } else {
         const errorText = await res.text();
-        console.error('Save score failed:', errorText);
         alert(`ውጤት ማስቀመጥ አልተቻለም: ${errorText}`);
       }
     } catch (err) {
-      console.error('Network error:', err);
       alert('የአውታረ መረብ ስህተት ተከስቷል');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  const formatCountdown = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
+
+  const countdownDanger = timeLeft <= 30;
 
   const titleWords = "የመጽሐፍ ቅዱስ ትውስታ ጨዋታ".split(' ');
 
@@ -234,7 +277,11 @@ export default function Home() {
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 217, 102, 0.3); border-radius: 10px; }
-
+        .danger-pulse { animation: danger-pulse 0.8s ease-in-out infinite; }
+        @keyframes danger-pulse {
+          0%, 100% { color: #ef4444; opacity: 1; }
+          50%       { color: #ff0000; opacity: 0.7; }
+        }
         @keyframes spin-slow {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
@@ -243,19 +290,13 @@ export default function Home() {
           from { transform: rotate(0deg); }
           to   { transform: rotate(-360deg); }
         }
-        .logo-arc-outer {
-          animation: spin-slow 12s linear infinite;
-        }
-        .logo-arc-inner {
-          animation: spin-reverse 8s linear infinite;
-        }
+        .logo-arc-outer { animation: spin-slow 12s linear infinite; }
+        .logo-arc-inner { animation: spin-reverse 8s linear infinite; }
         @keyframes glow-pulse {
           0%, 100% { opacity: 0.35; transform: scale(1); }
           50%       { opacity: 0.65; transform: scale(1.08); }
         }
-        .logo-glow {
-          animation: glow-pulse 3s ease-in-out infinite;
-        }
+        .logo-glow { animation: glow-pulse 3s ease-in-out infinite; }
       `}</style>
 
       {/* Background Ambience */}
@@ -295,271 +336,290 @@ export default function Home() {
 
       <main className="relative z-10 w-full min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-12">
         
-        {/* START SCREEN */}
-        {!gameActive && !gameFinished && !previewMode && (
-          <div className="my-auto w-full flex flex-col items-center">
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="text-center w-full max-w-lg py-8 sm:py-10 px-6 sm:px-12 rounded-[3rem] sm:rounded-[4rem] glass-panel relative overflow-hidden"
+        {/* ─── START SCREEN ─── */}
+        <AnimatePresence mode="wait">
+          {screen === 'start' && (
+            <motion.div
+              key="start"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.35 }}
+              className="my-auto w-full flex flex-col items-center"
             >
-              {/* Floating ambient sparkles */}
-              {[...Array(5)].map((_, i) => (
-                <motion.div 
-                  key={i}
-                  animate={{ opacity: [0, 1, 0], y: [0, -30], x: [0, (i % 2 === 0 ? 8 : -8)] }}
-                  transition={{ duration: 2.5 + i * 0.6, repeat: Infinity, delay: i * 0.8 }}
-                  className="absolute text-[#FFD966]/30 text-base select-none pointer-events-none"
-                  style={{ top: `${25 + i * 12}%`, left: `${8 + i * 18}%` }}
-                >
-                  ✦
-                </motion.div>
-              ))}
-
-              {/* ── Logo with premium glow frame ── */}
-              <div className="relative flex justify-center items-center mb-6 sm:mb-8" style={{ height: '180px' }}>
-
-                {/* Layered glow halos */}
-                <div className="logo-glow absolute w-44 h-44 rounded-full bg-[#d4af37]/20 blur-2xl" />
-                <div
-                  className="logo-glow absolute w-36 h-36 rounded-full bg-[#FFD966]/15 blur-xl"
-                  style={{ animationDelay: '0.5s' }}
-                />
-
-                {/* Outer dashed arc (clockwise) */}
-                <svg
-                  className="logo-arc-outer absolute"
-                  width="176"
-                  height="176"
-                  viewBox="0 0 176 176"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle
-                    cx="88"
-                    cy="88"
-                    r="82"
-                    stroke="#FFD966"
-                    strokeWidth="1.5"
-                    strokeOpacity="0.35"
-                    strokeDasharray="6 10"
-                    strokeLinecap="round"
-                  />
-                </svg>
-
-                {/* Inner dashed arc (counter-clockwise, offset dash) */}
-                <svg
-                  className="logo-arc-inner absolute"
-                  width="148"
-                  height="148"
-                  viewBox="0 0 148 148"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle
-                    cx="74"
-                    cy="74"
-                    r="68"
-                    stroke="#FFD966"
-                    strokeWidth="1"
-                    strokeOpacity="0.2"
-                    strokeDasharray="3 14"
-                    strokeLinecap="round"
-                  />
-                </svg>
-
-                {/* Four cardinal sparkle dots */}
-                {[0, 90, 180, 270].map((deg, i) => (
-                  <motion.div
+              <div className="text-center w-full max-w-lg py-8 sm:py-10 px-6 sm:px-12 rounded-[3rem] sm:rounded-[4rem] glass-panel relative overflow-hidden">
+                {[...Array(5)].map((_, i) => (
+                  <motion.div 
                     key={i}
-                    animate={{ opacity: [0.2, 1, 0.2], scale: [0.6, 1.2, 0.6] }}
-                    transition={{ duration: 2, repeat: Infinity, delay: i * 0.5 }}
-                    className="absolute w-1.5 h-1.5 rounded-full bg-[#FFD966]"
-                    style={{
-                      top: `calc(50% + ${Math.round(Math.sin((deg * Math.PI) / 180) * 88)}px - 3px)`,
-                      left: `calc(50% + ${Math.round(Math.cos((deg * Math.PI) / 180) * 88)}px - 3px)`,
-                    }}
-                  />
+                    animate={{ opacity: [0, 1, 0], y: [0, -30], x: [0, (i % 2 === 0 ? 8 : -8)] }}
+                    transition={{ duration: 2.5 + i * 0.6, repeat: Infinity, delay: i * 0.8 }}
+                    className="absolute text-[#FFD966]/30 text-base select-none pointer-events-none"
+                    style={{ top: `${25 + i * 12}%`, left: `${8 + i * 18}%` }}
+                  >✦</motion.div>
                 ))}
 
-                {/* Logo image */}
-                <motion.div
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', damping: 15, delay: 0.1 }}
-                  className="relative z-20"
-                >
-                  <img 
-                    src="/vent logo.png" 
-                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 border-[#FFD966]/60 shadow-[0_0_40px_rgba(255,217,102,0.3),0_0_80px_rgba(212,175,55,0.15)] object-cover"
-                    alt="Logo"
-                  />
-                </motion.div>
-              </div>
-
-              {/* Mascot */}
-              <div className="mb-6 sm:mb-8">
-                <Mascot mood="wave" />
-              </div>
-              
-              {/* Title & subtitle */}
-              <div className="space-y-3 mb-8 sm:mb-10">
-                <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-[#FFD966] via-[#fceabb] to-[#d4af37] drop-shadow-xl leading-[1.1]">
-                  {titleWords.join(' ')}
-                </h1>
-                <p className="text-[#FFD966]/70 text-base sm:text-lg font-medium tracking-wide">
-                  ቃሉን በልብህ ለመያዝ የተዘጋጀ ጨዋታ
-                </p>
-              </div>
-
-              <motion.button 
-                onClick={initGame} 
-                whileHover={{ scale: 1.05, translateY: -2 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative w-full sm:w-auto px-16 py-5 bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black font-black rounded-3xl text-xl sm:text-2xl shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] transition-all overflow-hidden"
-              >
-                <span className="relative z-10">ጀምር</span>
-                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 skew-x-12"></div>
-              </motion.button>
-            </motion.div>
-          </div>
-        )}
-
-        {/* GAME GRID */}
-        {(gameActive || previewMode) && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-2xl flex flex-col my-auto">
-            <div className="flex justify-center gap-6 mb-10">
-               <div className="glass-panel px-8 py-4 rounded-3xl flex flex-col items-center min-w-[120px]">
-                 <span className="text-[11px] opacity-40 uppercase font-black tracking-[0.2em] mb-1">Moves</span>
-                 <span className="text-[#FFD966] font-black text-3xl tabular-nums">{moves}</span> 
-               </div>
-               <div className="glass-panel px-8 py-4 rounded-3xl flex flex-col items-center min-w-[120px]">
-                 <span className="text-[11px] opacity-40 uppercase font-black tracking-[0.2em] mb-1">Time</span>
-                 <span className="text-[#FFD966] font-black text-3xl tabular-nums">
-                    {Math.floor(time / 60)}:{(time % 60).toString().padStart(2, '0')}
-                 </span> 
-               </div>
-            </div>
-            
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 sm:gap-6 p-2">
-              {cards.map((card, i) => (
-                <InteractiveCard key={i} card={card} isPreview={previewMode} onClick={(e) => handleCardClick(i, e)} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* FINISH SCREEN */}
-        {gameFinished && (
-          <div className="my-auto w-full flex justify-center px-2 sm:px-0">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="glass-panel p-6 sm:p-10 md:p-14 rounded-[2.5rem] sm:rounded-[4rem] text-center w-full max-w-lg shadow-2xl"
-            >
-              <div className="mb-5 scale-110">
-                <Mascot mood="success" />
-              </div>
-
-              <h2 className="text-4xl sm:text-5xl font-black text-[#FFD966] mb-2">ድንቅ ነው!</h2>
-              <p className="text-white/40 mb-8 text-xs sm:text-sm font-bold uppercase tracking-[0.3em]">Game Complete</p>
-              
-              {/* Score summary */}
-              <div className="flex gap-3 justify-center mb-8">
-                <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-center flex-1">
-                  <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-1">Moves</span>
-                  <span className="text-[#FFD966] font-black text-2xl">{moves}</span>
+                {/* Logo */}
+                <div className="relative flex justify-center items-center mb-6 sm:mb-8" style={{ height: '180px' }}>
+                  <div className="logo-glow absolute w-44 h-44 rounded-full bg-[#d4af37]/20 blur-2xl" />
+                  <div className="logo-glow absolute w-36 h-36 rounded-full bg-[#FFD966]/15 blur-xl" style={{ animationDelay: '0.5s' }} />
+                  <svg className="logo-arc-outer absolute" width="176" height="176" viewBox="0 0 176 176" fill="none">
+                    <circle cx="88" cy="88" r="82" stroke="#FFD966" strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="6 10" strokeLinecap="round"/>
+                  </svg>
+                  <svg className="logo-arc-inner absolute" width="148" height="148" viewBox="0 0 148 148" fill="none">
+                    <circle cx="74" cy="74" r="68" stroke="#FFD966" strokeWidth="1" strokeOpacity="0.2" strokeDasharray="3 14" strokeLinecap="round"/>
+                  </svg>
+                  {[0, 90, 180, 270].map((deg, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ opacity: [0.2, 1, 0.2], scale: [0.6, 1.2, 0.6] }}
+                      transition={{ duration: 2, repeat: Infinity, delay: i * 0.5 }}
+                      className="absolute w-1.5 h-1.5 rounded-full bg-[#FFD966]"
+                      style={{
+                        top: `calc(50% + ${Math.round(Math.sin((deg * Math.PI) / 180) * 88)}px - 3px)`,
+                        left: `calc(50% + ${Math.round(Math.cos((deg * Math.PI) / 180) * 88)}px - 3px)`,
+                      }}
+                    />
+                  ))}
+                  <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', damping: 15, delay: 0.1 }}
+                    className="relative z-20"
+                  >
+                    <img 
+                      src="/vent logo.png" 
+                      className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 border-[#FFD966]/60 shadow-[0_0_40px_rgba(255,217,102,0.3),0_0_80px_rgba(212,175,55,0.15)] object-cover"
+                      alt="Logo"
+                    />
+                  </motion.div>
                 </div>
-                <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-center flex-1">
-                  <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-1">Time</span>
-                  <span className="text-[#FFD966] font-black text-2xl">
-                    {Math.floor(time / 60)}:{(time % 60).toString().padStart(2, '0')}
+
+                <div className="mb-6 sm:mb-8"><Mascot mood="wave" /></div>
+                
+                <div className="space-y-3 mb-8 sm:mb-10">
+                  <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-[#FFD966] via-[#fceabb] to-[#d4af37] drop-shadow-xl leading-[1.1]">
+                    {titleWords.join(' ')}
+                  </h1>
+                  <p className="text-[#FFD966]/70 text-base sm:text-lg font-medium tracking-wide">
+                    ቃሉን በልብህ ለመያዝ የተዘጋጀ ጨዋታ
+                  </p>
+                  <p className="text-white/30 text-xs font-bold tracking-widest uppercase">
+                    {Math.floor(TOTAL_TIME / 60)} min time limit · match all pairs
+                  </p>
+                </div>
+
+                <motion.button 
+                  onClick={initGame} 
+                  whileHover={{ scale: 1.05, translateY: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="group relative w-full sm:w-auto px-16 py-5 bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black font-black rounded-3xl text-xl sm:text-2xl shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] transition-all overflow-hidden"
+                >
+                  <span className="relative z-10">ጀምር</span>
+                  <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 skew-x-12"></div>
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─── PLAYING SCREEN ─── */}
+          {screen === 'playing' && (
+            <motion.div
+              key="playing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="w-full max-w-2xl flex flex-col my-auto"
+            >
+              {/* Stats bar */}
+              <div className="flex justify-center gap-4 mb-10">
+                <div className="glass-panel px-6 py-4 rounded-3xl flex flex-col items-center min-w-[100px]">
+                  <span className="text-[11px] opacity-40 uppercase font-black tracking-[0.2em] mb-1">Moves</span>
+                  <span className="text-[#FFD966] font-black text-3xl tabular-nums">{moves}</span>
+                </div>
+
+                {/* Countdown – turns red when ≤30s */}
+                <div className={`glass-panel px-6 py-4 rounded-3xl flex flex-col items-center min-w-[120px] transition-colors duration-500 ${countdownDanger ? 'border-red-500/40 bg-red-900/10' : ''}`}>
+                  <span className="text-[11px] opacity-40 uppercase font-black tracking-[0.2em] mb-1">Time Left</span>
+                  <span className={`font-black text-3xl tabular-nums ${countdownDanger ? 'danger-pulse' : 'text-[#FFD966]'}`}>
+                    {formatCountdown(timeLeft)}
                   </span>
                 </div>
               </div>
 
-              {!saved ? (
-                // Not saved yet – show input + save button
-                <div className="space-y-3 mb-8 w-full">
-                  <input 
-                    type="text" 
-                    placeholder="ስምዎን ያስገቡ..." 
-                    value={playerName} 
-                    onChange={e => setPlayerName(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl sm:rounded-3xl text-center outline-none focus:border-[#FFD966]/50 focus:bg-white/10 transition-all text-white font-bold text-base sm:text-lg"
-                  />
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={saveScore} 
-                    disabled={isSaving}
-                    className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation disabled:opacity-50"
-                  >
-                    {isSaving ? 'በማስቀመጥ ላይ...' : 'ውጤት አስቀምጥ'}
-                  </motion.button>
-                </div>
-              ) : (
-                // Saved – show success message and Play Again button
-                <>
-                  <div className="bg-green-500/20 border border-green-500/30 text-green-400 py-4 rounded-2xl font-bold mb-6">
-                    ✅ ውጤትዎ በተሳካ ሁኔታ ተቀምጧል!
+              {previewMode && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-center mb-4 text-[#FFD966]/70 text-sm font-bold uppercase tracking-widest"
+                >
+                  ቁርጥቁሮቹን ተመልከት…
+                </motion.div>
+              )}
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 sm:gap-6 p-2">
+                {cards.map((card, i) => (
+                  <InteractiveCard key={i} card={card} isPreview={previewMode} onClick={(e) => handleCardClick(i, e)} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─── FINISHED SCREEN ─── */}
+          {screen === 'finished' && (
+            <motion.div
+              key="finished"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="my-auto w-full flex justify-center px-2 sm:px-0"
+            >
+              <div className="glass-panel p-6 sm:p-10 md:p-14 rounded-[2.5rem] sm:rounded-[4rem] text-center w-full max-w-lg shadow-2xl">
+                <div className="mb-5 scale-110"><Mascot mood="success" /></div>
+                <h2 className="text-4xl sm:text-5xl font-black text-[#FFD966] mb-2">ድንቅ ነው!</h2>
+                <p className="text-white/40 mb-8 text-xs sm:text-sm font-bold uppercase tracking-[0.3em]">Game Complete</p>
+                
+                <div className="flex gap-3 justify-center mb-8">
+                  <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-center flex-1">
+                    <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-1">Moves</span>
+                    <span className="text-[#FFD966] font-black text-2xl">{moves}</span>
                   </div>
+                  <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-center flex-1">
+                    <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-1">Time Used</span>
+                    <span className="text-[#FFD966] font-black text-2xl">
+                      {formatCountdown(TOTAL_TIME - timeLeft)}
+                    </span>
+                  </div>
+                </div>
+
+                {!saved ? (
+                  <div className="space-y-3 mb-8 w-full">
+                    <input 
+                      type="text" 
+                      placeholder="ስምዎን ያስገቡ..." 
+                      value={playerName} 
+                      onChange={e => setPlayerName(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl sm:rounded-3xl text-center outline-none focus:border-[#FFD966]/50 focus:bg-white/10 transition-all text-white font-bold text-base sm:text-lg"
+                    />
+                    <motion.button 
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={saveScore} 
+                      disabled={isSaving}
+                      className="w-full bg-[#FFD966] text-black py-4 sm:py-5 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-lg shadow-[#FFD966]/10 active:opacity-80 touch-manipulation disabled:opacity-50"
+                    >
+                      {isSaving ? 'በማስቀመጥ ላይ...' : 'ውጤት አስቀምጥ'}
+                    </motion.button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-green-500/20 border border-green-500/30 text-green-400 py-4 rounded-2xl font-bold mb-6">
+                      ✅ ውጤትዎ በተሳካ ሁኔታ ተቀምጧል!
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={initGame}
+                      className="w-full bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black py-5 rounded-3xl font-black text-2xl shadow-lg shadow-[#FFD966]/20 mb-6"
+                    >
+                      🔄 እንደገና ተጫወት
+                    </motion.button>
+                  </>
+                )}
+
+                {/* Leaderboard */}
+                <div className="text-left bg-black/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full">
+                  <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-white/10 pb-2">
+                    <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Leaderboard</p>
+                    <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Top Scores</p>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-2 sm:space-y-3 pr-1">
+                    {leaderboard.length === 0 ? (
+                      <p className="text-white/40 text-sm text-center py-4">No scores yet. Be the first!</p>
+                    ) : (
+                      leaderboard.map((l, i) => (
+                        <div key={i} className="flex justify-between items-center py-1">
+                          <span className="font-bold text-sm flex items-center gap-2 sm:gap-3 truncate mr-2">
+                            <span className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center rounded-full text-[9px] sm:text-[10px] ${i < 3 ? 'bg-[#FFD966] text-black' : 'bg-white/10 text-white/50'}`}>
+                              {i + 1}
+                            </span>
+                            <span className="truncate">{l.name}</span>
+                          </span>
+                          <span className="text-[#FFD966] font-bold text-xs sm:text-sm opacity-80 flex-shrink-0">
+                            {l.moves} <span className="text-[9px] sm:text-[10px] opacity-40 ml-0.5">moves</span>
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {!saved && (
+                  <button
+                    onClick={initGame}
+                    className="mt-6 text-white/50 text-xs sm:text-sm font-black uppercase tracking-widest hover:text-white/80 transition-all duration-300 touch-manipulation"
+                  >
+                    እንደገና ተጫወት (ያለ ማስቀመጥ)
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─── GAME OVER SCREEN ─── */}
+          {screen === 'gameover' && (
+            <motion.div
+              key="gameover"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="my-auto w-full flex justify-center px-2 sm:px-0"
+            >
+              <div className="glass-panel p-8 sm:p-14 rounded-[2.5rem] sm:rounded-[4rem] text-center w-full max-w-md shadow-2xl border border-red-500/20">
+                {/* Sad / time icon */}
+                <motion.div
+                  animate={{ rotate: [0, -8, 8, -8, 0], scale: [1, 1.05, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                  className="text-7xl mb-6 select-none"
+                >
+                  ⏰
+                </motion.div>
+
+                <h2 className="text-4xl sm:text-5xl font-black text-red-400 mb-3">ጊዜው አለቀ!</h2>
+                <p className="text-white/40 mb-2 text-xs sm:text-sm font-bold uppercase tracking-[0.3em]">Time's Up</p>
+                <p className="text-white/30 text-sm mb-10">
+                  You matched <span className="text-[#FFD966] font-black">{cards.filter(c => c.isMatched).length / 2}</span> of <span className="text-[#FFD966] font-black">{cards.length / 2}</span> pairs in <span className="text-[#FFD966] font-black">{moves}</span> moves.
+                </p>
+
+                <div className="flex flex-col gap-3 w-full">
                   <motion.button
-                    whileHover={{ scale: 1.05 }}
+                    whileHover={{ scale: 1.05, translateY: -2 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={initGame}
-                    className="w-full bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black py-5 rounded-3xl font-black text-2xl shadow-lg shadow-[#FFD966]/20 mb-6"
+                    className="group relative w-full px-10 py-5 bg-gradient-to-r from-[#FFD966] to-[#d4af37] text-black font-black rounded-3xl text-xl shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] overflow-hidden"
                   >
-                    🔄 እንደገና ተጫወት
+                    <span className="relative z-10">🔄 እንደገና ተጫወት</span>
+                    <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 skew-x-12"></div>
                   </motion.button>
-                </>
-              )}
 
-              {/* Leaderboard – shown after save as well */}
-              <div className="text-left bg-black/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full">
-                <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-white/10 pb-2">
-                  <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Leaderboard</p>
-                  <p className="text-[10px] sm:text-[11px] opacity-40 font-black uppercase tracking-widest">Top Scores</p>
-                </div>
-                <div className="max-h-44 overflow-y-auto -webkit-overflow-scrolling-touch custom-scrollbar space-y-2 sm:space-y-3 pr-1">
-                  {leaderboard.length === 0 ? (
-                    <p className="text-white/40 text-sm text-center py-4">No scores yet. Be the first!</p>
-                  ) : (
-                    leaderboard.map((l, i) => (
-                      <div key={i} className="flex justify-between items-center py-1">
-                        <span className="font-bold text-sm flex items-center gap-2 sm:gap-3 truncate mr-2">
-                          <span className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 flex items-center justify-center rounded-full text-[9px] sm:text-[10px] ${i < 3 ? 'bg-[#FFD966] text-black' : 'bg-white/10 text-white/50'}`}>
-                            {i + 1}
-                          </span>
-                          <span className="truncate">{l.name}</span>
-                        </span>
-                        <span className="text-[#FFD966] font-bold text-xs sm:text-sm opacity-80 flex-shrink-0">
-                          {l.moves} <span className="text-[9px] sm:text-[10px] opacity-40 ml-0.5">moves</span>
-                        </span>
-                      </div>
-                    ))
-                  )}
+                  <button
+                    onClick={() => setScreen('start')}
+                    className="w-full py-4 rounded-3xl border border-white/10 text-white/50 font-black text-sm uppercase tracking-widest hover:border-white/20 hover:text-white/70 transition-all duration-300"
+                  >
+                    ← ወደ መጀመሪያ ተመለስ
+                  </button>
                 </div>
               </div>
-
-              {/* For non‑saved state, also provide a "Play Again" option (optional) */}
-              {!saved && (
-                <button
-                  onClick={initGame}
-                  className="mt-6 text-white/50 text-xs sm:text-sm font-black uppercase tracking-widest hover:text-white/80 transition-all duration-300 touch-manipulation"
-                >
-                  እንደገና ተጫወት (ያለ ማስቀመጥ)
-                </button>
-              )}
             </motion.div>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
 
         {/* Footer */}
         <footer className="mt-auto pt-10 pb-4 opacity-25 text-[10px] uppercase tracking-[0.4em] font-black text-center">
           Bible Game
         </footer>
-
       </main>
     </div>
   );
@@ -572,11 +632,7 @@ const Mascot = ({ mood }) => (
       rotate: mood === 'success' ? [0, 8, -8, 0] : [0, 2, -2, 0],
       scale: mood === 'success' ? [1, 1.1, 1] : 1
     }} 
-    transition={{ 
-      repeat: Infinity, 
-      duration: mood === 'wave' ? 3 : 2, 
-      ease: "easeInOut" 
-    }}
+    transition={{ repeat: Infinity, duration: mood === 'wave' ? 3 : 2, ease: "easeInOut" }}
     className="w-28 h-28 sm:w-36 sm:h-36 mx-auto pointer-events-none drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)]"
   >
     <img 
